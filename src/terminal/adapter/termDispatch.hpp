@@ -176,6 +176,8 @@ public:
     void PlaySounds(const VTParameters /*parameters*/) override{}; // DECPS
 
     void SetVtChecksumReportSupport(const bool /*enabled*/) override{};
+
+    StringHandler EnterTmuxControl(const VTParameters /*parameters*/) override { return nullptr; }; // tmux -CC
 };
 
 #pragma warning(default : 26440) // Restore "can be declared noexcept" warning

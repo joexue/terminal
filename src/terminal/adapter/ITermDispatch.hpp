@@ -182,6 +182,8 @@ public:
     virtual StringHandler RestorePresentationState(const DispatchTypes::PresentationReportFormat format) = 0; // DECRSPS
 
     virtual void PlaySounds(const VTParameters parameters) = 0; // DECPS
+
+    virtual StringHandler EnterTmuxControl(const VTParameters parameters) = 0; // tmux -CC
 };
 inline Microsoft::Console::VirtualTerminal::ITermDispatch::~ITermDispatch() = default;
 #pragma warning(pop)

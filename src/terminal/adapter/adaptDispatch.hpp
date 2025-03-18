@@ -187,6 +187,8 @@ namespace Microsoft::Console::VirtualTerminal
 
         void SetVtChecksumReportSupport(const bool enabled) noexcept override;
 
+        StringHandler EnterTmuxControl(const VTParameters parameters) override; // tmux -CC
+
     private:
         enum class Mode
         {
