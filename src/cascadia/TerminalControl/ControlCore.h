@@ -446,7 +446,11 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         friend class ControlUnitTests::ControlCoreTests;
         friend class ControlUnitTests::ControlInteractivityTests;
         bool _inUnitTests{ false };
+
+        StringHandler _tmuxDcsHandler();
+        bool _isTmux { false };
     };
+
 }
 
 namespace winrt::Microsoft::Terminal::Control::factory_implementation
