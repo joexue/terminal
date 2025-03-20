@@ -15,6 +15,7 @@
 #include "../../types/inc/GlyphWidth.hpp"
 #include "../../cascadia/terminalcore/ITerminalInput.hpp"
 #include "../../terminal/parser/IStateMachineEngine.hpp"
+#include "../../terminal/adapter/ITermDispatch.hpp"
 
 #include <til/generational.h>
 #include <til/ticket_lock.h>
@@ -52,6 +53,8 @@ namespace TerminalCoreUnitTests
     class ScrollTest;
 };
 #endif
+
+using Microsoft::Console::VirtualTerminal::ITermDispatch;
 
 class Microsoft::Terminal::Core::Terminal final :
     public Microsoft::Console::VirtualTerminal::ITerminalApi,
@@ -327,6 +330,7 @@ public:
 #ifndef NDEBUG
     bool _suppressLockChecks = false;
 #endif
+    void SetTmuxControlHandlerGet(ITermDispatch::StringHandlerGet hdl);
 
 private:
     std::function<void(std::wstring_view)> _pfnWriteInput;

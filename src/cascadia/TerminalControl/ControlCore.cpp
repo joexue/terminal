@@ -159,6 +159,8 @@ namespace winrt::Microsoft::Terminal::Control::implementation
             _renderer->SetRendererEnteredErrorStateCallback([this]() { RendererEnteredErrorState.raise(nullptr, nullptr); });
 
             THROW_IF_FAILED(localPointerToThread->Initialize(_renderer.get()));
+
+           // _terminal.SetTmuxControlHandlerGet()
         }
 
         UpdateSettings(settings, unfocusedAppearance);
