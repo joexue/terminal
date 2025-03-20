@@ -447,7 +447,6 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         friend class ControlUnitTests::ControlInteractivityTests;
         bool _inUnitTests{ false };
 
-        StringHandler _tmuxDcsHandler();
         bool _isTmux { false };
     };
 

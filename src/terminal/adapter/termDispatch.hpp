@@ -178,6 +178,7 @@ public:
     void SetVtChecksumReportSupport(const bool /*enabled*/) override{};
 
     StringHandler EnterTmuxControl(const VTParameters /*parameters*/) override { return nullptr; }; // tmux -CC
+    void SetTmuxControlHandlerGet(StringHandlerGet /*hdl*/) override{}; // tmux -CC
 };
 
 #pragma warning(default : 26440) // Restore "can be declared noexcept" warning

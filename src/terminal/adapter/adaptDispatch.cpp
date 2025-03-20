@@ -4740,7 +4740,7 @@ ITermDispatch::StringHandler AdaptDispatch::EnterTmuxControl(const VTParameters 
     if (parameters.size() != 1 || parameters.at(0).value() != 1000) {
         return nullptr;
     }
-
+/*
     std::wstring_view string = L"Running the TMUX control mode, press 'q' to detach:";
     PrintString(string);
     CursorNextLine(1);
@@ -4753,4 +4753,16 @@ ITermDispatch::StringHandler AdaptDispatch::EnterTmuxControl(const VTParameters 
         }
         return true;
     };
+    */
+
+    if (_tmuxControlHandlerGet) {
+        return _tmuxControlHandlerGet();
+    }
+
+    return nullptr;
+}
+
+void AdaptDispatch::SetTmuxControlHandlerGet(StringHandlerGet hdl)
+{
+    _tmuxControlHandlerGet = hdl;
 }

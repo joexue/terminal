@@ -188,6 +188,7 @@ namespace Microsoft::Console::VirtualTerminal
         void SetVtChecksumReportSupport(const bool enabled) noexcept override;
 
         StringHandler EnterTmuxControl(const VTParameters parameters) override; // tmux -CC
+        void SetTmuxControlHandlerGet(StringHandlerGet hdl) override; // tmux -CC
 
     private:
         enum class Mode
@@ -343,7 +344,6 @@ namespace Microsoft::Console::VirtualTerminal
                                                TextAttribute& attr) noexcept;
         void _ApplyGraphicsOptions(const VTParameters options,
                                    TextAttribute& attr) noexcept;
-
 #ifdef UNIT_TESTING
         friend class AdapterTest;
 #endif
