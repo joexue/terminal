@@ -2960,4 +2960,19 @@ namespace winrt::Microsoft::Terminal::Control::implementation
     {
         _terminal->PreviewText(input);
     }
+
+    ITermDispatch::StringHandler ControlCore::_tmuxDcsHandler(void)
+    {
+        _isTmux = true;
+
+        return [this](const auto ch) mutable {
+            if (ch == '\n') {
+                //CursorNextLine(1);
+            } else {
+                //Print(ch);
+                //Print(ch);
+            }
+            return true;
+        };
+    }
 }

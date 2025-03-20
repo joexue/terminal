@@ -24,6 +24,7 @@
 #include "../../buffer/out/search.h"
 #include "../../cascadia/TerminalCore/Terminal.hpp"
 #include "../../renderer/inc/FontInfoDesired.hpp"
+#include "../../terminal/adapter/ITermDispatch.hpp"
 
 namespace Microsoft::Console::Render::Atlas
 {
@@ -40,6 +41,8 @@ namespace ControlUnitTests
     class ControlCoreTests;
     class ControlInteractivityTests;
 };
+
+using Microsoft::Console::VirtualTerminal::ITermDispatch;
 
 #define RUNTIME_SETTING(type, name, setting)                 \
 private:                                                     \
@@ -446,8 +449,8 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         friend class ControlUnitTests::ControlCoreTests;
         friend class ControlUnitTests::ControlInteractivityTests;
         bool _inUnitTests{ false };
-
         bool _isTmux { false };
+        ITermDispatch::StringHandler _tmuxDcsHandler(void);
     };
 
 }
