@@ -224,10 +224,22 @@ void Terminal::SetVtChecksumReportSupport(const bool enabled)
     engine.Dispatch().SetVtChecksumReportSupport(enabled);
 }
 
-void Terminal::SetTmuxControlHandlerGet(ITermDispatch::StringHandlerGet hdl)
+void Terminal::SetTmuxControlHandlerGet(ITermDispatch::StringHandlerGet hdl) const noexcept
 {
     auto& engine = reinterpret_cast<OutputStateMachineEngine&>(_stateMachine->Engine());
     engine.Dispatch().SetTmuxControlHandlerGet(hdl);
+}
+
+void Terminal::Print(const wchar_t wchPrintable)
+{
+    auto& engine = reinterpret_cast<OutputStateMachineEngine&>(_stateMachine->Engine());
+    engine.Dispatch().Print(wchPrintable);
+}
+
+void Terminal::LineFeed()
+{
+    auto& engine = reinterpret_cast<OutputStateMachineEngine&>(_stateMachine->Engine());
+    engine.Dispatch().LineFeed(DispatchTypes::LineFeedType::WithReturn);
 }
 
 bool Terminal::IsXtermBracketedPasteModeEnabled() const noexcept

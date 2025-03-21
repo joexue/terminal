@@ -130,6 +130,9 @@ public:
     std::wstring CurrentCommand() const;
 
     void SerializeMainBuffer(const wchar_t* destination) const;
+    void SetTmuxControlHandlerGet(ITermDispatch::StringHandlerGet hdl) const noexcept;
+    void Print(const wchar_t wchPrintable);
+    void LineFeed();
 
 #pragma region ITerminalApi
     // These methods are defined in TerminalApi.cpp
@@ -330,7 +333,6 @@ public:
 #ifndef NDEBUG
     bool _suppressLockChecks = false;
 #endif
-    void SetTmuxControlHandlerGet(ITermDispatch::StringHandlerGet hdl);
 
 private:
     std::function<void(std::wstring_view)> _pfnWriteInput;

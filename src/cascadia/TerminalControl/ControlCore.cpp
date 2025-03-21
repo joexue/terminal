@@ -159,10 +159,9 @@ namespace winrt::Microsoft::Terminal::Control::implementation
             _renderer->SetRendererEnteredErrorStateCallback([this]() { RendererEnteredErrorState.raise(nullptr, nullptr); });
 
             THROW_IF_FAILED(localPointerToThread->Initialize(_renderer.get()));
-
-           // _terminal.SetTmuxControlHandlerGet()
         }
 
+        _tmuxDcsHandler = nullptr;
         UpdateSettings(settings, unfocusedAppearance);
     }
 
@@ -405,6 +404,24 @@ namespace winrt::Microsoft::Terminal::Control::implementation
             _renderEngine->EnableTransparentBackground(_isBackgroundTransparent());
 
             _initializedTerminal.store(true, std::memory_order_relaxed);
+
+            _terminal->SetTmuxControlHandlerGet([this]() {
+                _isTmux = true;
+
+                return [this](const auto ch) mutable {
+                    if (ch == '\n') {
+                        _terminal->LineFeed();
+                    } else {
+                        _terminal->Print(ch);
+                    }
+                    bool ret = _tmuxDcsHandler ? _tmuxDcsHandler(ch) : false;
+                    if (!ret) {
+                        _isTmux = false;
+                        _sendInputToConnection(L"\n");
+                    }
+                    return ret;
+                };
+            });
         } // scope for TerminalLock
 
         return true;
@@ -492,6 +509,13 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         if (ch == L'\x3') // Ctrl+C or Ctrl+Break
         {
             _handleControlC();
+        }
+
+        if (_isTmux) {
+            if (ch == 'q' || ch == 'Q') {
+                SendInput(L"detach\n");
+            }
+            return true;
         }
 
         TerminalInput::OutputType out;
@@ -2963,18 +2987,8 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         _terminal->PreviewText(input);
     }
 
-    ITermDispatch::StringHandler ControlCore::_tmuxDcsHandler(void)
+    void ControlCore::SetTmuxControlHandler(ITermDispatch::StringHandler hdl)
     {
-        _isTmux = true;
-
-        return [this](const auto ch) mutable {
-            if (ch == '\n') {
-                //CursorNextLine(1);
-            } else {
-                //Print(ch);
-                //Print(ch);
-            }
-            return true;
-        };
+        _tmuxDcsHandler = hdl;
     }
 }

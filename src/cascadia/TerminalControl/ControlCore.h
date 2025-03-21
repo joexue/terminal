@@ -269,6 +269,7 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         bool ShouldShowSelectOutput();
 
         void PreviewInput(std::wstring_view input);
+        void SetTmuxControlHandler(ITermDispatch::StringHandler hdl);
 
         RUNTIME_SETTING(float, Opacity, _settings->Opacity());
         RUNTIME_SETTING(float, FocusedOpacity, FocusedAppearance().Opacity());
@@ -383,6 +384,8 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         void _handleControlC();
         void _sendInputToConnection(std::wstring_view wstr);
 
+        bool _isTmux { false };
+
 #pragma region TerminalCoreCallbacks
         void _terminalCopyToClipboard(wil::zwstring_view wstr);
         void _terminalWarningBell();
@@ -449,8 +452,7 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         friend class ControlUnitTests::ControlCoreTests;
         friend class ControlUnitTests::ControlInteractivityTests;
         bool _inUnitTests{ false };
-        bool _isTmux { false };
-        ITermDispatch::StringHandler _tmuxDcsHandler(void);
+        ITermDispatch::StringHandler _tmuxDcsHandler{ nullptr };
     };
 
 }

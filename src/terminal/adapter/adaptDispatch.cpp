@@ -4734,28 +4734,16 @@ void AdaptDispatch::PlaySounds(const VTParameters parameters)
     });
 }
 
-#include <iostream>
 ITermDispatch::StringHandler AdaptDispatch::EnterTmuxControl(const VTParameters parameters)
 {
     if (parameters.size() != 1 || parameters.at(0).value() != 1000) {
         return nullptr;
     }
-/*
-    std::wstring_view string = L"Running the TMUX control mode, press 'q' to detach:";
-    PrintString(string);
-    CursorNextLine(1);
-
-    return [this](const auto ch) mutable {
-        if (ch == '\n') {
-            CursorNextLine(1);
-        } else {
-            Print(ch);
-        }
-        return true;
-    };
-    */
 
     if (_tmuxControlHandlerGet) {
+        PrintString(L"Running the TMUX control mode, press 'q' to detach: ");
+        const auto page = _pages.ActivePage();
+        _DoLineFeed(page, true, false);
         return _tmuxControlHandlerGet();
     }
 
