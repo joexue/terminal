@@ -67,6 +67,9 @@ namespace Microsoft.Terminal.Control
         Boolean SearchRegexInvalid;
     };
 
+    delegate Boolean TmuxDCSHandler(Char ch);
+    delegate TmuxDCSHandler TmuxDCSHandlerProducer();
+
     [default_interface] runtimeclass SelectionColor
     {
         SelectionColor();
@@ -179,6 +182,9 @@ namespace Microsoft.Terminal.Control
         Boolean ShouldShowSelectOutput();
 
         void OpenCWD();
+        void SetTmuxControlHandlerProducer(TmuxDCSHandlerProducer producer);
+        void Print(Char wchPrintable);
+        void LineFeed();
 
         void ClearQuickFix();
 

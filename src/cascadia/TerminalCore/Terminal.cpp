@@ -224,10 +224,10 @@ void Terminal::SetVtChecksumReportSupport(const bool enabled)
     engine.Dispatch().SetVtChecksumReportSupport(enabled);
 }
 
-void Terminal::SetTmuxControlHandlerGet(ITermDispatch::StringHandlerGet hdl) const noexcept
+void Terminal::SetTmuxControlHandlerProducer(ITermDispatch::StringHandlerProducer producer) const noexcept
 {
     auto& engine = reinterpret_cast<OutputStateMachineEngine&>(_stateMachine->Engine());
-    engine.Dispatch().SetTmuxControlHandlerGet(hdl);
+    engine.Dispatch().SetTmuxControlHandlerProducer(producer);
 }
 
 void Terminal::Print(const wchar_t wchPrintable)

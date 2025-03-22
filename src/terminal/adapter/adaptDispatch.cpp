@@ -4740,17 +4740,17 @@ ITermDispatch::StringHandler AdaptDispatch::EnterTmuxControl(const VTParameters 
         return nullptr;
     }
 
-    if (_tmuxControlHandlerGet) {
+    if (_tmuxControlHandlerProducer) {
         PrintString(L"Running the TMUX control mode, press 'q' to detach: ");
         const auto page = _pages.ActivePage();
         _DoLineFeed(page, true, false);
-        return _tmuxControlHandlerGet();
+        return _tmuxControlHandlerProducer();
     }
 
     return nullptr;
 }
 
-void AdaptDispatch::SetTmuxControlHandlerGet(StringHandlerGet hdl)
+void AdaptDispatch::SetTmuxControlHandlerProducer(StringHandlerProducer producer)
 {
-    _tmuxControlHandlerGet = hdl;
+    _tmuxControlHandlerProducer = producer;
 }

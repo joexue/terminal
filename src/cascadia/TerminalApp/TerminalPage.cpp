@@ -3211,7 +3211,6 @@ namespace winrt::TerminalApp::implementation
 
         const auto content = _manager.CreateCore(settings.DefaultSettings(), settings.UnfocusedSettings(), connection);
         const TermControl control{ content };
-        _tmuxControl = std::make_unique<TmuxControl>();
         return _SetupControl(control);
     }
 
@@ -3367,6 +3366,7 @@ namespace winrt::TerminalApp::implementation
             original->SetActive();
         }
 
+        _tmuxControl = std::make_unique<TmuxControl>(resultPane);
         return resultPane;
     }
 

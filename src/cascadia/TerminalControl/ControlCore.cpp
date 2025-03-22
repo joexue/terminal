@@ -161,7 +161,6 @@ namespace winrt::Microsoft::Terminal::Control::implementation
             THROW_IF_FAILED(localPointerToThread->Initialize(_renderer.get()));
         }
 
-        _tmuxDcsHandler = nullptr;
         UpdateSettings(settings, unfocusedAppearance);
     }
 
@@ -404,24 +403,6 @@ namespace winrt::Microsoft::Terminal::Control::implementation
             _renderEngine->EnableTransparentBackground(_isBackgroundTransparent());
 
             _initializedTerminal.store(true, std::memory_order_relaxed);
-
-            _terminal->SetTmuxControlHandlerGet([this]() {
-                _isTmux = true;
-
-                return [this](const auto ch) mutable {
-                    if (ch == '\n') {
-                        _terminal->LineFeed();
-                    } else {
-                        _terminal->Print(ch);
-                    }
-                    bool ret = _tmuxDcsHandler ? _tmuxDcsHandler(ch) : false;
-                    if (!ret) {
-                        _isTmux = false;
-                        _sendInputToConnection(L"\n");
-                    }
-                    return ret;
-                };
-            });
         } // scope for TerminalLock
 
         return true;
@@ -509,13 +490,6 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         if (ch == L'\x3') // Ctrl+C or Ctrl+Break
         {
             _handleControlC();
-        }
-
-        if (_isTmux) {
-            if (ch == 'q' || ch == 'Q') {
-                SendInput(L"detach\n");
-            }
-            return true;
         }
 
         TerminalInput::OutputType out;
@@ -2987,8 +2961,17 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         _terminal->PreviewText(input);
     }
 
-    void ControlCore::SetTmuxControlHandler(ITermDispatch::StringHandler hdl)
+    void ControlCore::SetTmuxControlHandlerProducer(ITermDispatch::StringHandlerProducer producer)
     {
-        _tmuxDcsHandler = hdl;
+        _terminal->SetTmuxControlHandlerProducer(producer);
+    }
+    void ControlCore::Print(const wchar_t wchPrintable)
+    {
+        _terminal->Print(wchPrintable);
+    }
+
+    void ControlCore::LineFeed()
+    {
+        _terminal->LineFeed();
     }
 }

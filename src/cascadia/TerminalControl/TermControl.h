@@ -118,6 +118,9 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         void SelectOutput(const bool goUp);
 
         winrt::hstring CurrentWorkingDirectory() const;
+        void SetTmuxControlHandlerProducer(winrt::Microsoft::Terminal::Control::TmuxDCSHandlerProducer producer);
+        void Print(const wchar_t wchPrintable);
+        void LineFeed();
 #pragma endregion
 
         void ScrollViewport(int viewTop);
@@ -451,6 +454,7 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         void _SelectCommandHandler(const IInspectable& sender, const IInspectable& args);
         void _SelectOutputHandler(const IInspectable& sender, const IInspectable& args);
         bool _displayCursorWhileBlurred() const noexcept;
+        winrt::Microsoft::Terminal::Control::TmuxDCSHandlerProducer _producer { nullptr };
 
         struct Revokers
         {

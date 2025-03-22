@@ -130,7 +130,7 @@ public:
     std::wstring CurrentCommand() const;
 
     void SerializeMainBuffer(const wchar_t* destination) const;
-    void SetTmuxControlHandlerGet(ITermDispatch::StringHandlerGet hdl) const noexcept;
+    void SetTmuxControlHandlerProducer(ITermDispatch::StringHandlerProducer producer) const noexcept;
     void Print(const wchar_t wchPrintable);
     void LineFeed();
 

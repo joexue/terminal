@@ -1442,6 +1442,7 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         // Likewise, run the event handlers outside of lock (they could
         // be reentrant)
         Initialized.raise(*this, nullptr);
+        _core.SetTmuxControlHandlerProducer(_producer);
         return true;
     }
 
@@ -4192,5 +4193,19 @@ namespace winrt::Microsoft::Terminal::Control::implementation
             }
             _core.CursorOn(focused);
         }
+    }
+    void TermControl::SetTmuxControlHandlerProducer(winrt::Microsoft::Terminal::Control::TmuxDCSHandlerProducer producer)
+    {
+        _producer = producer;
+        //_core.SetTmuxControlHandlerProducer(producer);
+    }
+    void TermControl::Print(const wchar_t wchPrintable)
+    {
+        _core.Print(wchPrintable);
+    }
+
+    void TermControl::LineFeed()
+    {
+        _core.LineFeed();
     }
 }

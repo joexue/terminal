@@ -24,7 +24,7 @@ class Microsoft::Console::VirtualTerminal::ITermDispatch
 {
 public:
     using StringHandler = std::function<bool(const wchar_t)>;
-    using StringHandlerGet = std::function<StringHandler(void)>;
+    using StringHandlerProducer = std::function<StringHandler(void)>;
 
 #pragma warning(push)
 #pragma warning(disable : 26432) // suppress rule of 5 violation on interface because tampering with this is fraught with peril
@@ -185,9 +185,9 @@ public:
     virtual void PlaySounds(const VTParameters parameters) = 0; // DECPS
 
     virtual StringHandler EnterTmuxControl(const VTParameters parameters) = 0; // tmux -CC
-    virtual void SetTmuxControlHandlerGet(StringHandlerGet hdl) = 0; // tmux -CC
+    virtual void SetTmuxControlHandlerProducer(StringHandlerProducer producer) = 0; // tmux -CC
 
-    StringHandlerGet _tmuxControlHandlerGet { nullptr };
+    StringHandlerProducer _tmuxControlHandlerProducer { nullptr };
 };
 inline Microsoft::Console::VirtualTerminal::ITermDispatch::~ITermDispatch() = default;
 #pragma warning(pop)
