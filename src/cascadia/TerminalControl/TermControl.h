@@ -455,6 +455,7 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         void _SelectOutputHandler(const IInspectable& sender, const IInspectable& args);
         bool _displayCursorWhileBlurred() const noexcept;
         winrt::Microsoft::Terminal::Control::TmuxDCSHandlerProducer _producer { nullptr };
+        bool _isTmux { false };
 
         struct Revokers
         {
