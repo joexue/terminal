@@ -24,8 +24,7 @@ namespace Microsoft.Terminal.Control
         Shown
     };
 
-    //delegate Boolean TmuxDCSHandler(Char ch);
-    //delegate TmuxDCSHandler TmuxDCSHandlerProducer();
+    delegate Boolean TmuxKeyHandler(Char ch);
 
     [default_interface] runtimeclass TermControl : Windows.UI.Xaml.Controls.UserControl,
                                                    IDirectKeyListener,
@@ -160,6 +159,7 @@ namespace Microsoft.Terminal.Control
 
         void Detach();
         void SetTmuxControlHandlerProducer(TmuxDCSHandlerProducer producer);
+        void SetTmuxKeyHandler(TmuxKeyHandler hdl);
         void Print(Char wchPrintable);
         void LineFeed();
     }

@@ -11,9 +11,10 @@ namespace winrt::TerminalApp::implementation
     TmuxControl::TmuxControl(std::shared_ptr<Pane> pane):
         _pane(pane)
     {
-        _pane->GetTerminalControl().SetTmuxControlHandlerProducer([this]() {
+        auto _core = _pane->GetTerminalControl();
 
-//                _isTmux = true;
+        _core.SetTmuxControlHandlerProducer([this]() {
+                _state = State::ATTACHING;
 
                 return [this](const auto ch) mutable {
                     if (ch == '\n') {
@@ -32,12 +33,19 @@ namespace winrt::TerminalApp::implementation
                     return true;
                 };
         });
+        _core.SetTmuxKeyHandler([this, _core](const auto ch) mutable {
+            if (_state != INIT)
+            {
+                if (ch == 'q' || ch == 'Q')
+                {
+                    _core.RawWriteString(L"detach\n");
+                }
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        });
     }
-
-    /*
-static bool DcsHandler(TmuxControl *This, wch const wchar_t)
-{
-        return true;
-}
-*/
 }

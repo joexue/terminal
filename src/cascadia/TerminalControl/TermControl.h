@@ -119,6 +119,7 @@ namespace winrt::Microsoft::Terminal::Control::implementation
 
         winrt::hstring CurrentWorkingDirectory() const;
         void SetTmuxControlHandlerProducer(winrt::Microsoft::Terminal::Control::TmuxDCSHandlerProducer producer);
+        void SetTmuxKeyHandler(winrt::Microsoft::Terminal::Control::TmuxKeyHandler hdl);
         void Print(const wchar_t wchPrintable);
         void LineFeed();
 #pragma endregion
@@ -455,7 +456,7 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         void _SelectOutputHandler(const IInspectable& sender, const IInspectable& args);
         bool _displayCursorWhileBlurred() const noexcept;
         winrt::Microsoft::Terminal::Control::TmuxDCSHandlerProducer _producer { nullptr };
-        bool _isTmux { false };
+        winrt::Microsoft::Terminal::Control::TmuxKeyHandler _tmuxKeyHandler { nullptr };
 
         struct Revokers
         {

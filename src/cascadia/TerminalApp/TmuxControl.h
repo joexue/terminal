@@ -9,6 +9,10 @@ namespace winrt::TerminalApp::implementation
 {
     class TmuxControl
     {
+        enum State : int {
+            INIT = 0,
+            ATTACHING = 1,
+        };
     public:
         TmuxControl(std::shared_ptr<Pane> pane);
 
@@ -16,5 +20,6 @@ namespace winrt::TerminalApp::implementation
         //static bool DcsHandler(TmuxControl *This, wch const wchar_t);
     private:
         std::shared_ptr<Pane> _pane { nullptr };
+        State _state { State::INIT };
     };
 }

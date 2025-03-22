@@ -1519,10 +1519,8 @@ namespace winrt::Microsoft::Terminal::Control::implementation
                                    const WORD scanCode,
                                    const winrt::Microsoft::Terminal::Core::ControlKeyStates modifiers)
     {
-        if (_isTmux) {
-            if (character == 'q' || character == 'Q') {
-                _core.SendInput(L"detach\n");
-            }
+        if (_tmuxKeyHandler && _tmuxKeyHandler(character))
+        {
             return true;
         }
         return _core.SendCharEvent(character, scanCode, modifiers);
@@ -4202,14 +4200,14 @@ namespace winrt::Microsoft::Terminal::Control::implementation
     }
     void TermControl::SetTmuxControlHandlerProducer(winrt::Microsoft::Terminal::Control::TmuxDCSHandlerProducer producer)
     {
-        _producer = [this, producer] {
-            _isTmux = true;
-
-            return producer();
-        };
-        //_producer = producer;
-        //_core.SetTmuxControlHandlerProducer(producer);
+        _producer = producer;
     }
+
+    void TermControl::SetTmuxKeyHandler(winrt::Microsoft::Terminal::Control::TmuxKeyHandler hdl)
+    {
+        _tmuxKeyHandler = hdl;
+    }
+
     void TermControl::Print(const wchar_t wchPrintable)
     {
         _core.Print(wchPrintable);
