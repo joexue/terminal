@@ -3366,7 +3366,7 @@ namespace winrt::TerminalApp::implementation
             original->SetActive();
         }
 
-        _tmuxControl = std::make_unique<TmuxControl>(resultPane);
+        _tmuxControl = std::make_unique<TmuxControl>(this, resultPane);
         return resultPane;
     }
 
