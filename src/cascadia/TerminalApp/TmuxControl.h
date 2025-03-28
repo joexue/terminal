@@ -15,7 +15,7 @@ namespace winrt::TerminalApp::implementation
     class TmuxControl
     {
     public:
-        TmuxControl(TerminalPage* page, std::shared_ptr<Pane> pane);
+        TmuxControl(TerminalPage* page, std::shared_ptr<Pane> pane, winrt::Windows::System::DispatcherQueue dq);
         ~TmuxControl();
 
     private:
@@ -169,6 +169,7 @@ namespace winrt::TerminalApp::implementation
         void _StartOutputThread(void* parameter) noexcept;
 
         HANDLE _hCmdEvent;
+        winrt::Windows::System::DispatcherQueue _dispatchQueue;
 
         std::shared_ptr<Pane> _pane{ nullptr };
         TerminalPage* _page{ nullptr };

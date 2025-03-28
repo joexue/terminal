@@ -3,6 +3,7 @@
 
 #include "pch.h"
 
+#include "ScratchpadContent.h"
 #include "TmuxControl.h"
 #include "TerminalPage.h"
 
@@ -15,9 +16,10 @@ namespace winrt::TerminalApp::implementation
     const std::wregex TmuxControl::REG_SESSION_CHANGED{ L"^%session-changed \\$(\\d+) \\w+$" };
     const std::wregex TmuxControl::REG_EXIT{ L"^%exit$" };
 
-    TmuxControl::TmuxControl(TerminalPage* page, std::shared_ptr<Pane> pane) :
+    TmuxControl::TmuxControl(TerminalPage* page, std::shared_ptr<Pane> pane, winrt::Windows::System::DispatcherQueue dq) :
         _pane(pane),
-        _page(page)
+        _page(page),
+        _dispatchQueue(dq)
     {
         auto _core = _pane->GetTerminalControl();
 
@@ -43,8 +45,20 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_NewTab()
     {
-        NewTerminalArgs newTerminalArgs{};
-        _page->_OpenNewTab(newTerminalArgs);
+        _dispatchQueue.TryEnqueue([&]() {
+            //NewTerminalArgs newTerminalArgs{0};
+            //ScratchpadContent newTerminalArgs{};
+            const auto& scratchPane{ winrt::make_self<ScratchpadContent>() };
+            //_page->_OpenNewTab(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));
+
+            auto pane = _page->_MakePane(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));
+            _page->_CreateNewTabFromPane(_page->_MakePane(scratchPane->GetNewTerminalArgs(BuildStartupKind::None), nullptr));
+            auto pane1 = _page->_MakePane(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));
+            _page->_SplitPane(_page->_GetFocusedTabImpl(),
+                             SplitDirection::Automatic,
+                             0.5f,
+                             pane1);
+        });
     }
 
     void TmuxControl::_Response(std::wstring& result)
@@ -78,6 +92,7 @@ namespace winrt::TerminalApp::implementation
             auto cmd = std::make_unique<ListWindows>();
             cmd.get()->sessionId = _event.sessionId;
             _SendCommand(std::move(cmd));
+            _NewTab();
         }
         break;
         case RESPONSE:
