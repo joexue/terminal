@@ -6,6 +6,7 @@
 #include "ScratchpadContent.h"
 #include "TmuxControl.h"
 #include "TerminalPage.h"
+#include "TmuxPaneContent.h"
 
 using namespace winrt::Microsoft::Terminal::Settings::Model;
 namespace winrt::TerminalApp::implementation
@@ -51,7 +52,7 @@ namespace winrt::TerminalApp::implementation
         _dispatchQueue.TryEnqueue([&]() {
             //NewTerminalArgs newTerminalArgs{0};
             //ScratchpadContent newTerminalArgs{};
-            const auto& scratchPane{ winrt::make_self<ScratchpadContent>() };
+            const auto& scratchPane{ winrt::make_self<TmuxPaneContent>() };
             //_page->_OpenNewTab(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));
 
             auto pane = _page->_MakePane(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));

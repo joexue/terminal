@@ -18,6 +18,8 @@
 #include "ScratchpadContent.h"
 #include "SnippetsPaneContent.h"
 #include "MarkdownPaneContent.h"
+#include "TmuxPaneContent.h"
+#include "TmuxControl.h"
 #include "TabRowControl.h"
 #include "Remoting.h"
 
@@ -25,7 +27,6 @@
 #include "RenameWindowRequestedArgs.g.cpp"
 #include "RequestMoveContentArgs.g.cpp"
 #include "LaunchPositionRequest.g.cpp"
-#include <TmuxControl.h>
 
 using namespace winrt;
 using namespace winrt::Microsoft::Management::Deployment;
@@ -3460,6 +3461,17 @@ namespace winrt::TerminalApp::implementation
 
                 content = *markdownContent;
             }
+        }
+        else if (paneType == L"tmux")
+        {
+            const auto& tmuxPane{ winrt::make_self<TmuxPaneContent>() };
+
+            // This is maybe a little wacky - add our key event handler to the pane
+            // we made. So that we can get actions for keys that the content didn't
+            // handle.
+            tmuxPane->GetRoot().KeyDown({ get_weak(), &TerminalPage::_KeyDownHandler });
+
+            content = *tmuxPane;
         }
 
         assert(content);
