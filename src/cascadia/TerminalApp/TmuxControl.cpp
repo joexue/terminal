@@ -36,6 +36,9 @@ namespace winrt::TerminalApp::implementation
         _core.SetTmuxKeyHandler([this](const auto ch) mutable {
             return _KeyDown(ch);
         });
+
+
+        return;
     }
 
     TmuxControl::~TmuxControl()
@@ -109,6 +112,97 @@ namespace winrt::TerminalApp::implementation
 
         _ScheduleCommand();
         return true;
+    }
+
+    std::vector<TmuxControl::Layout> TmuxControl::_ParseLayout(std::wstring& layout)
+    {
+        std::wregex RegPane { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+),(\\d+)" };
+
+        std::wregex RegSplitHPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\{" };
+        std::wregex RegSplitVPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\[" };
+        std::wregex RegSplitPop { L"^[\\} | \\]]" };
+        std::vector<TmuxControl::Layout> result;
+
+        auto _ExtractPane = [&](std::wsmatch& matches, PaneRect& p) {
+            p.width = std::stoi(matches.str(1));
+            p.height = std::stoi(matches.str(2));
+            p.left = std::stoi(matches.str(3));
+            p.top = std::stoi(matches.str(4));
+            if (matches.size() > 5)
+            {
+                p.id = std::stoi(matches.str(5));
+            }  
+        };
+
+        auto _ParseNested = [&](std::wstring) {
+            std::wsmatch maches;
+            size_t parse_len = 0;
+            Layout l;
+
+            std::vector<Layout> stack;
+
+            while (layout.length() > 0) {
+                if (std::regex_search(layout, maches, RegSplitHPush)) {
+                    PaneRect p;
+                    _ExtractPane(maches, p);
+                    l.panes.push_back(p);
+                    stack.push_back(l);
+
+                    l.type = SPLIT_HORIZONTAL;
+                    l.panes.clear();
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, maches, RegSplitVPush)) {
+                    PaneRect p;
+                    _ExtractPane(maches, p);
+                    l.panes.push_back(p);
+                    stack.push_back(l);
+
+                    // New one
+                    l.type = SPLIT_VERTICAL;
+                    l.panes.clear();
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, maches, RegPane)) {
+                    PaneRect p;
+                    _ExtractPane(maches, p);
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, maches, RegSplitPop)) {
+                    auto id = l.panes.back().id;
+                    l.panes.pop_back();
+                    l.panes.front().id = id;
+                    result.insert(result.begin(), l);
+
+                    //result.push_back(l);
+                    l = stack.back();
+                    l.panes.back().id = id;
+                    stack.pop_back();
+                } else {
+                    assert(0);
+                }
+                parse_len = maches.length(0);
+                layout = layout.substr(parse_len);
+            }
+
+            return result;
+        };
+
+        // Single pane mode
+        std::wsmatch maches;
+        if (std::regex_match(layout, maches, RegPane)) {
+            PaneRect p;
+            _ExtractPane(maches, p);
+
+            Layout l;
+            l.type = SIGNLE_PANE;
+            l.panes.push_back(p);
+
+            result.push_back(l);
+            return result;
+        }
+
+        // Nested mode
+        _ParseNested(layout);
+
+        return result;
     }
 
     bool TmuxControl::_Parse()
@@ -223,6 +317,20 @@ namespace winrt::TerminalApp::implementation
             if (ch == 'q')
             {
                 auto _core = _pane->GetTerminalControl();
+                #if 0
+                // Calculate the maximux terminal size
+                const auto hwnd = reinterpret_cast<HWND>(_core.OwningHwnd());
+                RECT clientRect, clientRect1;
+                GetWindowRect(hwnd, &clientRect);
+                GetClientRect(hwnd, &clientRect1);
+                auto fd = _core.CharacterDimensions();
+               // auto p = _core.GetFontSize();
+                auto h = _core.ViewHeight();
+                auto w = _core.ViewWidth();
+                (void)h;
+                (void)w;
+                #endif
+                
                 _core.RawWriteString(L"detach\n");
             }
             return true;

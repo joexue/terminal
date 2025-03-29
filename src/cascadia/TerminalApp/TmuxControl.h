@@ -12,6 +12,8 @@ namespace winrt::TerminalApp::implementation
 {
     struct TerminalPage;
 
+ 
+
     class TmuxControl
     {
     public:
@@ -155,10 +157,35 @@ namespace winrt::TerminalApp::implementation
             bool HandleResult(std::wstring& result) override;
         };
 
+        enum LayoutType : int
+        {
+            SIGNLE_PANE,
+            SPLIT_HORIZONTAL,
+            SPLIT_VERTICAL,
+        };
+
+        struct PaneRect
+        {
+            int width;
+            int height;
+            int left;
+            int top;
+            int id;
+        };
+
+        struct Layout
+        {
+            LayoutType type;
+            std::vector<PaneRect> panes;
+        };
+
         void _NewTab();
         bool _EventHandle();
-        bool _Advance(wchar_t ch);
+
+        std::vector<Layout> _ParseLayout(std::wstring& layout);
         bool _Parse();
+        bool _Advance(wchar_t ch);
+
         bool _KeyDown(wchar_t ch);
         void _SendCommand(std::unique_ptr<Command> cmd);
         void _ScheduleCommand();
