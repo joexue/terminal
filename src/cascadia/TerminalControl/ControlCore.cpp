@@ -1549,6 +1549,16 @@ namespace winrt::Microsoft::Terminal::Control::implementation
     }
 
     // Function Description:
+    // - Gets the width of the terminal in lines of text. This is just the
+    //   widht of the viewport.
+    // Return Value:
+    // - The width of the terminal in lines of text
+    int ControlCore::ViewWidth() const
+    {
+        const auto lock = _terminal->LockForReading();
+        return _terminal->GetViewport().Width();
+    }
+    // Function Description:
     // - Gets the height of the terminal in lines of text. This includes the
     //   history AND the viewport.
     // Return Value:
