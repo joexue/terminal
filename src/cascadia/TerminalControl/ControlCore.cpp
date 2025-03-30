@@ -464,6 +464,16 @@ namespace winrt::Microsoft::Terminal::Control::implementation
         }
     }
 
+    void ControlCore::SendOutput(const std::wstring_view wstr)
+    {
+        if (wstr.empty())
+        {
+            return;
+        }
+
+        _terminal->Write(wstr);
+    }
+
     bool ControlCore::SendCharEvent(const wchar_t ch,
                                     const WORD scanCode,
                                     const ::Microsoft::Terminal::Core::ControlKeyStates modifiers)

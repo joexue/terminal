@@ -47,6 +47,7 @@ namespace winrt::TerminalApp::implementation
 
     }
 
+    static std::shared_ptr<Pane> p;
     void TmuxControl::_NewTab()
     {
         _dispatchQueue.TryEnqueue([&]() {
@@ -54,11 +55,11 @@ namespace winrt::TerminalApp::implementation
             //_page->_OpenNewTab(newTerminalArgs);
 
             //const auto p = _page->_MakePane(newContentArgs);
-            std::shared_ptr<Pane> p;
+            //std::shared_ptr<Pane> p;
             _page->_CreateNewTabFromPane(p = _page->_MakePane(newContentArgs));
             auto _core = p->GetTerminalControl();
-            _core.SendOutput(L"test\ntest\ntest");
-            _core.RawWriteString(L"tett\n");
+//            _core.SendOutput(L"test\ntest\ntest");
+            //_core.RawWriteString(L"tett\n");
 
             #if 0
             const auto& scratchPane{ winrt::make_self<ScratchpadContent>() };
@@ -320,7 +321,10 @@ namespace winrt::TerminalApp::implementation
             // Only accept 'q' in tmux control pane
             if (ch == 'q')
             {
-                auto _core = _pane->GetTerminalControl();
+                auto _c = p->GetTerminalControl();
+                _c.SendOutput(L"test\ntest\ntest");
+
+                //auto _core = _pane->GetTerminalControl();
                 #if 0
                 // Calculate the maximux terminal size
                 const auto hwnd = reinterpret_cast<HWND>(_core.OwningHwnd());
@@ -335,7 +339,9 @@ namespace winrt::TerminalApp::implementation
                 (void)w;
                 #endif
                 
-                _core.RawWriteString(L"detach\n");
+                //_core.RawWriteString(L"detach\n");
+
+
             }
             return true;
         }
