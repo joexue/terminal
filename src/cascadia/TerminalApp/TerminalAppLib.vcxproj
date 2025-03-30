@@ -303,9 +303,12 @@
     <ClCompile Include="SettingsPaneContent.cpp">
       <DependentUpon>TerminalPaneContent.idl</DependentUpon>
     </ClCompile>
+    <ClCompile Include="TmuxControl.cpp">
+      <DependentUpon>TerminalPage.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </ClCompile>
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
     <ClCompile Include="Toast.cpp" />
-    <ClCompile Include="TmuxControl.cpp" />
     <ClCompile Include="TmuxPaneContent.cpp" />
     <ClCompile Include="TerminalSettingsCache.cpp">
       <DependentUpon>TerminalSettingsCache.idl</DependentUpon>

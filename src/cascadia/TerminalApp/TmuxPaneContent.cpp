@@ -13,6 +13,7 @@ namespace winrt::TerminalApp::implementation
     TmuxPaneContent::TmuxPaneContent()
     {
         _root = winrt::Windows::UI::Xaml::Controls::Grid{};
+#if 0
         // Vertical and HorizontalAlignment are Stretch by default
 
         auto res = Windows::UI::Xaml::Application::Current().Resources();
@@ -24,6 +25,7 @@ namespace winrt::TerminalApp::implementation
         _box.AcceptsReturn(true);
         _box.TextWrapping(TextWrapping::Wrap);
         _root.Children().Append(_box);
+#endif
     }
 
     void TmuxPaneContent::UpdateSettings(const CascadiaSettings& /*settings*/)
@@ -39,9 +41,8 @@ namespace winrt::TerminalApp::implementation
     {
         return { 1, 1 };
     }
-    void TmuxPaneContent::Focus(winrt::Windows::UI::Xaml::FocusState reason)
+    void TmuxPaneContent::Focus(winrt::Windows::UI::Xaml::FocusState /*reason*/)
     {
-        _box.Focus(reason);
     }
     void TmuxPaneContent::Close()
     {

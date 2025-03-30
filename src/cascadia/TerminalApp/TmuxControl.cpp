@@ -50,18 +50,21 @@ namespace winrt::TerminalApp::implementation
     void TmuxControl::_NewTab()
     {
         _dispatchQueue.TryEnqueue([&]() {
-            //NewTerminalArgs newTerminalArgs{0};
-            //ScratchpadContent newTerminalArgs{};
-            const auto& scratchPane{ winrt::make_self<TmuxPaneContent>() };
-            //_page->_OpenNewTab(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));
+            NewTerminalArgs newContentArgs{ 0 };
+            //_page->_OpenNewTab(newTerminalArgs);
 
+            //const auto p = _page->_MakePane(newContentArgs);
+            std::shared_ptr<Pane> p;
+            _page->_CreateNewTabFromPane(p = _page->_MakePane(newContentArgs));
+            auto _core = p->GetTerminalControl();
+            _core.SendOutput(L"test\ntest\ntest");
+            _core.RawWriteString(L"tett\n");
+
+            #if 0
+            const auto& scratchPane{ winrt::make_self<ScratchpadContent>() };
             auto pane = _page->_MakePane(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));
-            _page->_CreateNewTabFromPane(_page->_MakePane(scratchPane->GetNewTerminalArgs(BuildStartupKind::None), nullptr));
-            auto pane1 = _page->_MakePane(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));
-            _page->_SplitPane(_page->_GetFocusedTabImpl(),
-                             SplitDirection::Automatic,
-                             0.5f,
-                             pane1);
+            _page->_CreateNewTabFromPane(pane);
+            #endif
         });
     }
 
