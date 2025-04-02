@@ -3462,18 +3462,20 @@ namespace winrt::TerminalApp::implementation
                 content = *markdownContent;
             }
         }
+#if 1
         else if (paneType == L"tmux")
         {
-            const auto& tmuxPane{ winrt::make_self<TmuxPaneContent>() };
+            const auto control = _AttachControlToContent(0);
+            const auto& tmuxPane{ winrt::make_self<TmuxPaneContent>(control) };
 
             // This is maybe a little wacky - add our key event handler to the pane
             // we made. So that we can get actions for keys that the content didn't
             // handle.
-            tmuxPane->GetRoot().KeyDown({ get_weak(), &TerminalPage::_KeyDownHandler });
+            //tmuxPane->GetRoot().KeyDown({ get_weak(), &TerminalPage::_KeyDownHandler });
 
             content = *tmuxPane;
         }
-
+#endif
         assert(content);
 
         return std::make_shared<Pane>(content);

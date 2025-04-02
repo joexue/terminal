@@ -5,6 +5,7 @@
 
 #include <regex>
 #include <vector>
+#include <unordered_map>
 
 #include "Pane.h"
 
@@ -179,6 +180,7 @@ namespace winrt::TerminalApp::implementation
             std::vector<PaneRect> panes;
         };
 
+        std::shared_ptr<Pane> _NewPane(const Microsoft::Terminal::Settings::Model::NewTerminalArgs& newTerminalArgs);
         void _NewTab();
         bool _EventHandle();
 
@@ -203,6 +205,7 @@ namespace winrt::TerminalApp::implementation
         std::vector<wchar_t> _buffer;
 
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
+        std::unordered_map<int, std::shared_ptr<Pane>> _panes;
 
     };
 }

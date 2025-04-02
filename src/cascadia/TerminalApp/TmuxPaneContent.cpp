@@ -28,6 +28,11 @@ namespace winrt::TerminalApp::implementation
 #endif
     }
 
+    TmuxPaneContent::TmuxPaneContent(const winrt::Microsoft::Terminal::Control::TermControl& control) :
+        _control(control)
+    {
+    }
+
     void TmuxPaneContent::UpdateSettings(const CascadiaSettings& /*settings*/)
     {
         // Nothing to do.
@@ -35,7 +40,7 @@ namespace winrt::TerminalApp::implementation
 
     winrt::Windows::UI::Xaml::FrameworkElement TmuxPaneContent::GetRoot()
     {
-        return _root;
+        return _control;
     }
     winrt::Windows::Foundation::Size TmuxPaneContent::MinimumSize()
     {
@@ -61,6 +66,6 @@ namespace winrt::TerminalApp::implementation
 
     winrt::Windows::UI::Xaml::Media::Brush TmuxPaneContent::BackgroundBrush()
     {
-        return _root.Background();
+        return _control.Background();
     }
 }

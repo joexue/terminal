@@ -11,6 +11,7 @@ namespace winrt::TerminalApp::implementation
     {
     public:
         TmuxPaneContent();
+        TmuxPaneContent(const winrt::Microsoft::Terminal::Control::TermControl& control);
 
         winrt::Windows::UI::Xaml::FrameworkElement GetRoot();
 
@@ -35,5 +36,6 @@ namespace winrt::TerminalApp::implementation
     private:
         winrt::Windows::UI::Xaml::Controls::Grid _root{ nullptr };
         winrt::Windows::UI::Xaml::Controls::TextBox _box{ nullptr };
+        winrt::Microsoft::Terminal::Control::TermControl _control{ nullptr };
     };
 }

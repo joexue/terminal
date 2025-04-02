@@ -1,14 +1,20 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
-#include "pch.h"
+#include <winrt/Microsoft.Terminal.TerminalConnection.h>
+#include <winrt/impl/Microsoft.Terminal.TerminalConnection.1.h>
 
+#include "pch.h"
 #include "ScratchpadContent.h"
 #include "TmuxControl.h"
 #include "TerminalPage.h"
 #include "TmuxPaneContent.h"
 
+using namespace winrt::Microsoft::Terminal;
+using winrt::Microsoft::Terminal::Control::TermControl;
 using namespace winrt::Microsoft::Terminal::Settings::Model;
+using namespace winrt::Microsoft::Terminal::TerminalConnection;
+
 namespace winrt::TerminalApp::implementation
 {
     const std::wregex TmuxControl::REG_BEGIN{ L"^%begin \\d+ \\d+ \\d+$" };
@@ -46,25 +52,65 @@ namespace winrt::TerminalApp::implementation
     {
 
     }
+ 
 
-    static std::shared_ptr<Pane> p;
+    std::shared_ptr<Pane> TmuxControl::_NewPane(const NewTerminalArgs& newTerminalArgs)
+    {
+        TerminalConnection::ITerminalConnection connection{ nullptr };
+        connection = TerminalConnection::EchoConnection{};
+
+        TerminalSettingsCreateResult controlSettings{ nullptr };
+ 
+        const auto& profile = _page->_settings.GetProfileForArgs(newTerminalArgs);
+
+        controlSettings = TerminalSettings::CreateWithProfile(_page->_settings, profile, *_page->_bindings);
+        const auto control = _page->_CreateNewControlAndContent(controlSettings, connection);
+
+
+        auto paneContent{ winrt::make<TerminalPaneContent> (profile, _page->_terminalSettingsCache, control) };
+        auto resultPane = std::make_shared<Pane>(paneContent);
+        return resultPane;
+    }
+
     void TmuxControl::_NewTab()
     {
         _dispatchQueue.TryEnqueue([&]() {
             NewTerminalArgs newContentArgs{ 0 };
             //_page->_OpenNewTab(newTerminalArgs);
+            std::shared_ptr<Pane> p;
+            _page->_CreateNewTabFromPane(p = _NewPane(newContentArgs));
+            _panes.insert({ 0, p });
 
-            //const auto p = _page->_MakePane(newContentArgs);
-            //std::shared_ptr<Pane> p;
-            _page->_CreateNewTabFromPane(p = _page->_MakePane(newContentArgs));
-            auto _core = p->GetTerminalControl();
-//            _core.SendOutput(L"test\ntest\ntest");
-            //_core.RawWriteString(L"tett\n");
+            auto _c = p->GetTerminalControl();
+           // _c.SendOutput(L"test\ntest\ntest");
+            _c.SendInput(L"test1test1test1");
 
             #if 0
-            const auto& scratchPane{ winrt::make_self<ScratchpadContent>() };
+            auto p1 = _NewPane(newContentArgs);
+            _panes.insert({ 0, p1 });
+            _page->_SplitPane(_page->_GetFocusedTabImpl(),
+                              SplitDirection::Automatic,
+                              0.5f,
+                              p1);
+            #endif
+            //const auto p = _page->_MakePane(newContentArgs);
+            //std::shared_ptr<Pane> p;
+            //_page->_CreateNewTabFromPane(p = _page->_MakePane(newContentArgs));
+            //auto _core = p->GetTerminalControl();
+//            _core.SendOutput(L"test\ntest\ntest");
+            //_core.RawWriteString(L"tett\n");
+            
+            #if 0
+            std::shared_ptr<Pane> p;
+            const auto& scratchPane{ winrt::make_self<TmuxPaneContent>() };
             auto pane = _page->_MakePane(scratchPane->GetNewTerminalArgs(BuildStartupKind::None));
             _page->_CreateNewTabFromPane(pane);
+            
+            //_page->_SplitPane(_page->_GetFocusedTabImpl(),
+             //                  SplitDirection::Automatic,
+              //                 0.5f,
+               //                pane);
+
             #endif
         });
     }
@@ -321,11 +367,13 @@ namespace winrt::TerminalApp::implementation
             // Only accept 'q' in tmux control pane
             if (ch == 'q')
             {
+                auto _core = _pane->GetTerminalControl();
+#if 0
                 auto _c = p->GetTerminalControl();
                 _c.SendOutput(L"test\ntest\ntest");
 
                 //auto _core = _pane->GetTerminalControl();
-                #if 0
+
                 // Calculate the maximux terminal size
                 const auto hwnd = reinterpret_cast<HWND>(_core.OwningHwnd());
                 RECT clientRect, clientRect1;
@@ -339,9 +387,7 @@ namespace winrt::TerminalApp::implementation
                 (void)w;
                 #endif
                 
-                //_core.RawWriteString(L"detach\n");
-
-
+                _core.RawWriteString(L"detach\n");
             }
             return true;
         }
