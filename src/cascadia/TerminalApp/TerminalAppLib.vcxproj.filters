@@ -45,7 +45,6 @@
     <ClCompile Include="LanguageProfileNotifier.cpp" />
     <ClCompile Include="Monarch.cpp" />
     <ClCompile Include="Peasant.cpp" />
-    <ClCompile Include="TmuxControl.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -83,7 +82,6 @@
     <ClInclude Include="WindowsPackageManagerFactory.h" />
     <ClInclude Include="Monarch.h" />
     <ClInclude Include="Peasant.h" />
-    <ClInclude Include="TmuxControl.h" />
   </ItemGroup>
   <ItemGroup>
     <Midl Include="AppLogic.idl">

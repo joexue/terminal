@@ -3367,8 +3367,7 @@ namespace winrt::TerminalApp::implementation
             original->SetActive();
         }
 
-        const auto dispatcherQueue = winrt::Windows::System::DispatcherQueue::GetForCurrentThread();
-        _tmuxControl = std::make_unique<TmuxControl>(this, resultPane, dispatcherQueue);
+        _tmuxControl = std::make_unique<TmuxControl>(*this, resultPane);
         return resultPane;
     }
 

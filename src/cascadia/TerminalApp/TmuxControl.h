@@ -13,12 +13,10 @@ namespace winrt::TerminalApp::implementation
 {
     struct TerminalPage;
 
- 
-
     class TmuxControl
     {
     public:
-        TmuxControl(TerminalPage* page, std::shared_ptr<Pane> pane, winrt::Windows::System::DispatcherQueue dq);
+        TmuxControl(TerminalPage& page, std::shared_ptr<Pane> pane);
         ~TmuxControl();
 
     private:
@@ -26,13 +24,37 @@ namespace winrt::TerminalApp::implementation
         static const std::wregex REG_END;
         static const std::wregex REG_ERROR;
 
-        static const std::wregex REG_SESSION_CHANGED;
+        static const std::wregex REG_CLIENT_SESSION_CHANGED;
+        static const std::wregex REG_CLIENT_DETACHED;
+        static const std::wregex REG_CONFIG_ERROR;
+        static const std::wregex REG_CONTINUE;
         static const std::wregex REG_EXIT;
+        static const std::wregex REG_EXTENDED_OUTPUT;
+        static const std::wregex REG_LAYOUT_CHANGED;
+        static const std::wregex REG_MESSAGE;
+        static const std::wregex REG_OUTPUT;
+        static const std::wregex REG_PANE_MODE_CHANGED;
+        static const std::wregex REG_PASTE_BUFFER_CHANGED;
+        static const std::wregex REG_PASTE_BUFFER_DELETED;
+        static const std::wregex REG_PAUSE;
+        static const std::wregex REG_SESSION_CHANGED;
+        static const std::wregex REG_SESSION_RENAMED;
+        static const std::wregex REG_SESSION_WINDOW_CHANGED;
+        static const std::wregex REG_SESSIONS_CHANGED;
+        static const std::wregex REG_SUBSCRIPTION_CHANGED;
+        static const std::wregex REG_UNLINKED_WINDOW_ADD;
+        static const std::wregex REG_UNLINKED_WINDOW_CLOSE;
+        static const std::wregex REG_UNLINKED_WINDOW_RENAMED;
+        static const std::wregex REG_WINDOW_ADD;
+        static const std::wregex REG_WINDOW_CLOSE;
+        static const std::wregex REG_WINDOW_PANE_CHANGED;
+        static const std::wregex REG_WINDOW_RENAMED;
 
         enum State : int
         {
-            INIT = 0,
-            ATTACHING = 1,
+            INIT,
+            ATTACHING,
+            ATTACH_DONE,
         } _state{ INIT };
 
         enum CommandState : int
@@ -46,12 +68,33 @@ namespace winrt::TerminalApp::implementation
             BEGIN,
             END,
             ERR,
-            ENTER,
+            CLIENT_SESSION_CHANGED,
+            CLIENT_DETACHED,
+            CONFIG_ERROR,
+            CONTINUE,
             EXIT,
+            EXTENEDED_OUTPUT,
+            LAYOUT_CHANGED,
             NOTHING,
+            MESSAGE,
             OUTPUT,
+            PANE_MODE_CHANGED,
+            PASTE_BUFFER_CHANGED,
+            PASTE_BUFFER_DELETED,
+            PAUSE,
             RESPONSE,
             SESSION_CHANGED,
+            SESSION_RENAMED,
+            SESSION_WINDOW_CHANGED,
+            SESSIONS_CHANGED,
+            SUBSCRIPTION_CHANGED,
+            UNLINKED_WINDOW_ADD,
+            UNLINKED_WINDOW_CLOSE,
+            UNLINKED_WINDOW_RENAMED,
+            WINDOW_ADD,
+            WINDOW_CLOSE,
+            WINDOW_PANE_CHANGED,
+            WINDOW_RENAMED,
         };
 
         struct Event
@@ -68,13 +111,13 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             virtual std::wstring GetCommand() = 0;
-            virtual bool HandleResult(std::wstring& result) = 0;
+            virtual bool HandleResult(std::wstring& result, TmuxControl& tmux) = 0;
         };
 
         struct ListWindows : public Command {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t windowId;
             int32_t sessionId;
@@ -84,7 +127,7 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t paneId;
         };
@@ -93,7 +136,7 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t paneId;
         };
@@ -102,7 +145,7 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t paneId;
             std::vector<wchar_t> keys;
@@ -112,7 +155,7 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t paneId;
         };
@@ -121,14 +164,14 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
         };
 
         struct SplitPane : public Command
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t paneId;
         };
@@ -137,7 +180,7 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t windowId;
         };
@@ -146,7 +189,7 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t paneId;
         };
@@ -155,7 +198,16 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result) override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+        };
+
+        struct RefreshClient : public Command
+        {
+        public:
+            std::wstring GetCommand() override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+            int width;
+            int height;
         };
 
         enum LayoutType : int
@@ -180,12 +232,15 @@ namespace winrt::TerminalApp::implementation
             std::vector<PaneRect> panes;
         };
 
+        // Private methods
+        void _ListWindows(int windowId);
+        void _RefreshClient();
         std::shared_ptr<Pane> _NewPane(const Microsoft::Terminal::Settings::Model::NewTerminalArgs& newTerminalArgs);
         void _NewTab();
-        bool _EventHandle();
+        bool _EventHandle(Event& e);
 
         std::vector<Layout> _ParseLayout(std::wstring& layout);
-        bool _Parse();
+        bool _Parse(std::vector<wchar_t> buffer);
         bool _Advance(wchar_t ch);
 
         bool _KeyDown(wchar_t ch);
@@ -194,18 +249,17 @@ namespace winrt::TerminalApp::implementation
         void _Clean();
         void _Response(std::wstring& result);
 
-        static DWORD WINAPI _OutputThreadProc(_In_ LPVOID lpParameter);
-        void _StartOutputThread(void* parameter) noexcept;
+        // Private variables
+        winrt::Windows::System::DispatcherQueue _dispatcherQueue{ nullptr };
+        std::shared_ptr<Pane> _controlPane{ nullptr };
+        TerminalPage& _page;
 
-        HANDLE _hCmdEvent;
-        winrt::Windows::System::DispatcherQueue _dispatchQueue;
-
-        std::shared_ptr<Pane> _pane{ nullptr };
-        TerminalPage* _page{ nullptr };
-        std::vector<wchar_t> _buffer;
-
+        std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
-        std::unordered_map<int, std::shared_ptr<Pane>> _panes;
+        std::unordered_map<int, std::shared_ptr<Pane>> _attachedPanes;
 
+        int _width;
+        int _height;
+        int _sessionId;
     };
 }
