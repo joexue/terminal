@@ -1,6 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+#include <sstream>
+#include <iostream>
+
 #include <winrt/Microsoft.Terminal.TerminalConnection.h>
 #include <winrt/impl/Microsoft.Terminal.TerminalConnection.1.h>
 
@@ -10,6 +13,7 @@
 #include "TerminalPage.h"
 #include "TmuxPaneContent.h"
 
+// To be deleted
 #include <fstream>
 static std::wfstream tmuxLog;
 
@@ -25,6 +29,16 @@ static void tmux_log_put(wchar_t ch)
     if (ch == '\n') {
         tmuxLog.flush();
     }
+}
+
+static void tmux_log_open()
+{
+    tmuxLog.open(L"d:\\tmux.log", std::wfstream::out | std::wfstream::trunc);
+}
+
+static void tmux_log_close()
+{
+    tmuxLog.close();
 }
 
 using namespace winrt::Microsoft::Terminal;
@@ -79,7 +93,7 @@ namespace winrt::TerminalApp::implementation
             _width = _core.ViewWidth();
             _height = _core.ViewHeight();
 
-            tmuxLog.open(L"d:\\tmux.log", std::wfstream::out | std::wfstream::trunc);
+            tmux_log_open();
 
             return [this](const auto ch) mutable {
                 return _Advance(ch);
@@ -164,7 +178,7 @@ namespace winrt::TerminalApp::implementation
         _dcsBuffer.clear();
         _cmdState = READY;
         // make sure the thread can exit
-        tmuxLog.close();
+        tmux_log_close();
     }
 
     bool TmuxControl::_EventHandle(Event& e)
@@ -194,95 +208,9 @@ namespace winrt::TerminalApp::implementation
         return true;
     }
 
-    std::vector<TmuxControl::Layout> TmuxControl::_ParseLayout(std::wstring& layout)
+    bool TmuxControl::_SyncWindowState(std::vector<TmuxWindow> /*windows*/)
     {
-        std::wregex RegPane { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+),(\\d+)" };
-
-        std::wregex RegSplitHPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\{" };
-        std::wregex RegSplitVPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\[" };
-        std::wregex RegSplitPop { L"^[\\} | \\]]" };
-        std::vector<TmuxControl::Layout> result;
-
-        auto _ExtractPane = [&](std::wsmatch& matches, PaneRect& p) {
-            p.width = std::stoi(matches.str(1));
-            p.height = std::stoi(matches.str(2));
-            p.left = std::stoi(matches.str(3));
-            p.top = std::stoi(matches.str(4));
-            if (matches.size() > 5)
-            {
-                p.id = std::stoi(matches.str(5));
-            }
-        };
-
-        auto _ParseNested = [&](std::wstring) {
-            std::wsmatch maches;
-            size_t parse_len = 0;
-            Layout l;
-
-            std::vector<Layout> stack;
-
-            while (layout.length() > 0) {
-                if (std::regex_search(layout, maches, RegSplitHPush)) {
-                    PaneRect p;
-                    _ExtractPane(maches, p);
-                    l.panes.push_back(p);
-                    stack.push_back(l);
-
-                    l.type = SPLIT_HORIZONTAL;
-                    l.panes.clear();
-                    l.panes.push_back(p);
-                } else if (std::regex_search(layout, maches, RegSplitVPush)) {
-                    PaneRect p;
-                    _ExtractPane(maches, p);
-                    l.panes.push_back(p);
-                    stack.push_back(l);
-
-                    // New one
-                    l.type = SPLIT_VERTICAL;
-                    l.panes.clear();
-                    l.panes.push_back(p);
-                } else if (std::regex_search(layout, maches, RegPane)) {
-                    PaneRect p;
-                    _ExtractPane(maches, p);
-                    l.panes.push_back(p);
-                } else if (std::regex_search(layout, maches, RegSplitPop)) {
-                    auto id = l.panes.back().id;
-                    l.panes.pop_back();
-                    l.panes.front().id = id;
-                    result.insert(result.begin(), l);
-
-                    //result.push_back(l);
-                    l = stack.back();
-                    l.panes.back().id = id;
-                    stack.pop_back();
-                } else {
-                    assert(0);
-                }
-                parse_len = maches.length(0);
-                layout = layout.substr(parse_len);
-            }
-
-            return result;
-        };
-
-        // Single pane mode
-        std::wsmatch maches;
-        if (std::regex_match(layout, maches, RegPane)) {
-            PaneRect p;
-            _ExtractPane(maches, p);
-
-            Layout l;
-            l.type = SIGNLE_PANE;
-            l.panes.push_back(p);
-
-            result.push_back(l);
-            return result;
-        }
-
-        // Nested mode
-        _ParseNested(layout);
-
-        return result;
+        return true;
     }
 
     bool TmuxControl::_Parse(std::vector<wchar_t> buffer)
@@ -442,6 +370,97 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
+    std::vector<TmuxControl::Layout> TmuxControl::_ParseLayout(std::wstring& layout)
+    {
+        std::wregex RegPane { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+),(\\d+)" };
+
+        std::wregex RegSplitHPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\{" };
+        std::wregex RegSplitVPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\[" };
+        std::wregex RegSplitPop { L"^[\\} | \\]]" };
+        std::vector<TmuxControl::Layout> result;
+
+        auto _ExtractPane = [&](std::wsmatch& matches, PaneLayout& p) {
+            p.width = std::stoi(matches.str(1));
+            p.height = std::stoi(matches.str(2));
+            p.left = std::stoi(matches.str(3));
+            p.top = std::stoi(matches.str(4));
+            if (matches.size() > 5)
+            {
+                p.id = std::stoi(matches.str(5));
+            }
+        };
+
+        auto _ParseNested = [&](std::wstring) {
+            std::wsmatch matches;
+            size_t parse_len = 0;
+            Layout l;
+
+            std::vector<Layout> stack;
+
+            while (layout.length() > 0) {
+                if (std::regex_search(layout, matches, RegSplitHPush)) {
+                    PaneLayout p;
+                    _ExtractPane(matches, p);
+                    l.panes.push_back(p);
+                    stack.push_back(l);
+
+                    l.type = SPLIT_HORIZONTAL;
+                    l.panes.clear();
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, matches, RegSplitVPush)) {
+                    PaneLayout p;
+                    _ExtractPane(matches, p);
+                    l.panes.push_back(p);
+                    stack.push_back(l);
+
+                    // New one
+                    l.type = SPLIT_VERTICAL;
+                    l.panes.clear();
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, matches, RegPane)) {
+                    PaneLayout p;
+                    _ExtractPane(matches, p);
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, matches, RegSplitPop)) {
+                    auto id = l.panes.back().id;
+                    l.panes.pop_back();
+                    l.panes.front().id = id;
+                    result.insert(result.begin(), l);
+
+                    //result.push_back(l);
+                    l = stack.back();
+                    l.panes.back().id = id;
+                    stack.pop_back();
+                } else {
+                    assert(0);
+                }
+                parse_len = matches.length(0);
+                layout = layout.substr(parse_len);
+            }
+
+            return result;
+        };
+
+        // Single pane mode
+        std::wsmatch matches;
+        if (std::regex_match(layout, matches, RegPane)) {
+            PaneLayout p;
+            _ExtractPane(matches, p);
+
+            Layout l;
+            l.type = SIGNLE_PANE;
+            l.panes.push_back(p);
+
+            result.push_back(l);
+            return result;
+        }
+
+        // Nested mode
+        _ParseNested(layout);
+
+        return result;
+    }
+
     std::wstring TmuxControl::ListWindows::GetCommand()
     {
         return std::wstring(std::format(L"list-windows -F '"
@@ -449,12 +468,42 @@ namespace winrt::TerminalApp::implementation
                                         L"#{{window_width}} #{{window_height}} "
                                         L"#{{window_active}} "
                                         L"#{{window_layout}} "
-                                        L"#{{history_limit}} "
+                                        L"#{{history_limit}}"
                                         L"' -t ${}\n", this->sessionId));
     }
 
-    bool TmuxControl::ListWindows::HandleResult(std::wstring& /*result*/, TmuxControl& /*tmux*/)
+    bool TmuxControl::ListWindows::HandleResult(std::wstring& result, TmuxControl& tmux)
     {
+        std::wstring line;
+        std::wregex REG_WINDOW{ L"^\\$(\\d+) @(\\d+) (\\d+) (\\d+) (\\d+) ([\\dabcdefABCDEF]{4}),([\\S]+) (\\d+)$" };
+        std::vector<TmuxWindow> windows;
+
+        std::wstringstream in;
+        in.str(result);
+
+        while (std::getline(in, line, L'\n'))
+        {
+            TmuxWindow w;
+            std::wsmatch matches;
+
+            if (!std::regex_match(line, matches, REG_WINDOW)) {
+                continue;
+            }
+            w.sessionId = std::stoi(matches.str(1));
+            w.windowId = std::stoi(matches.str(2));
+            w.width = std::stoi(matches.str(3));
+            w.height = std::stoi(matches.str(4));
+            w.active = (std::stoi(matches.str(5)) == 1);
+            w.layoutCsum = matches.str(6);
+            w.historyLimit = std::stoi(matches.str(8));
+            std::wstring layout(matches.str(7));
+            w.layout = tmux._ParseLayout(layout);
+            std::wstring log(std::format(L"window: {} {} {} {} {} {} {}\n", w.sessionId, w.windowId, w.width, w.height, w.active, w.historyLimit, matches.str(7)));
+            tmux_log(log);
+            windows.push_back(w);
+        }
+
+        tmux._SyncWindowState(windows);
         return true;
     }
 

@@ -217,7 +217,7 @@ namespace winrt::TerminalApp::implementation
             SPLIT_VERTICAL,
         };
 
-        struct PaneRect
+        struct PaneLayout
         {
             int width;
             int height;
@@ -229,7 +229,20 @@ namespace winrt::TerminalApp::implementation
         struct Layout
         {
             LayoutType type;
-            std::vector<PaneRect> panes;
+            std::vector<PaneLayout> panes;
+        };
+
+        struct TmuxWindow
+        {
+            int sessionId;
+            int windowId;
+            int width;
+            int height;
+            int historyLimit;
+            bool active;
+            std::wstring name;
+            std::wstring layoutCsum;
+            std::vector<Layout> layout;
         };
 
         // Private methods
@@ -239,6 +252,7 @@ namespace winrt::TerminalApp::implementation
         void _NewTab();
         bool _EventHandle(Event& e);
 
+        bool _SyncWindowState(std::vector<TmuxWindow> windows);
         std::vector<Layout> _ParseLayout(std::wstring& layout);
         bool _Parse(std::vector<wchar_t> buffer);
         bool _Advance(wchar_t ch);
