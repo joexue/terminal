@@ -45,6 +45,7 @@ using namespace winrt::Microsoft::Terminal;
 using winrt::Microsoft::Terminal::Control::TermControl;
 using namespace winrt::Microsoft::Terminal::Settings::Model;
 using namespace winrt::Microsoft::Terminal::TerminalConnection;
+using winrt::Microsoft::Terminal::Settings::Model::SplitDirection;
 
 namespace winrt::TerminalApp::implementation
 {
@@ -113,8 +114,9 @@ namespace winrt::TerminalApp::implementation
     }
 
 
-    std::shared_ptr<Pane> TmuxControl::_NewPane(const NewTerminalArgs& newTerminalArgs)
+    std::shared_ptr<Pane> TmuxControl::_NewPane()
     {
+        NewTerminalArgs newTerminalArgs{ 0 };
         TerminalConnection::ITerminalConnection connection{ nullptr };
         connection = TerminalConnection::EchoConnection{};
 
@@ -133,6 +135,7 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_NewTab()
     {
+#if 0
         _dispatcherQueue.TryEnqueue([&]() {
             NewTerminalArgs newContentArgs{ 0 };
             //_page->_OpenNewTab(newTerminalArgs);
@@ -140,6 +143,7 @@ namespace winrt::TerminalApp::implementation
             _page._CreateNewTabFromPane(p = _NewPane(newContentArgs));
             _attachedPanes.insert({ 0, p });
         });
+#endif
     }
 
     void TmuxControl::_Response(std::wstring& result)
@@ -181,7 +185,7 @@ namespace winrt::TerminalApp::implementation
         tmux_log_close();
     }
 
-    bool TmuxControl::_EventHandle(Event& e)
+    void TmuxControl::_EventHandle(Event& e)
     {
 
         switch(e.type)
@@ -205,12 +209,6 @@ namespace winrt::TerminalApp::implementation
         }
 
         _ScheduleCommand();
-        return true;
-    }
-
-    bool TmuxControl::_SyncWindowState(std::vector<TmuxWindow> /*windows*/)
-    {
-        return true;
     }
 
     bool TmuxControl::_Parse(std::vector<wchar_t> buffer)
@@ -286,7 +284,13 @@ namespace winrt::TerminalApp::implementation
             }
         }
 
-        return _EventHandle(_event);
+        // Put in main thread
+        Event e = _event;
+        _dispatcherQueue.TryEnqueue([&]() {
+            _EventHandle(e);
+        });
+
+        return true;
     }
 
     // from tmux to controller
@@ -333,23 +337,21 @@ namespace winrt::TerminalApp::implementation
 
         _cmdState = WAITING;
 
-        _dispatcherQueue.TryEnqueue([&]() {
-            while (_cmdQueue.size() != 0)
+        while (_cmdQueue.size() != 0)
+        {
+            auto cmd = _cmdQueue.front().get();
+            auto cmdStr = cmd->GetCommand();
+            if (cmdStr.empty())
             {
-                auto cmd = _cmdQueue.front().get();
-                auto cmdStr = cmd->GetCommand();
-                if (cmdStr.empty())
-                {
-                    _cmdQueue.pop_front();
-                    continue;
-                }
-                tmux_log(cmdStr);
-                auto _core = _controlPane->GetTerminalControl();
-                _core.RawWriteString(cmdStr);
-                return;
+                _cmdQueue.pop_front();
+                continue;
             }
-            _cmdState = READY;
-        });
+            tmux_log(cmdStr);
+            auto _core = _controlPane->GetTerminalControl();
+            _core.RawWriteString(cmdStr);
+            return;
+        }
+        _cmdState = READY;
     }
 
     bool TmuxControl::_KeyDown(wchar_t ch)
@@ -368,6 +370,75 @@ namespace winrt::TerminalApp::implementation
         {
             return false;
         }
+    }
+
+    bool TmuxControl::_SyncWindowState(std::vector<TmuxWindow> windows)
+    {
+        for (auto& w : windows)
+        {
+            auto direction = SplitDirection::Left;
+            for (auto& l : w.layout)
+            {
+                int scaleRoot;
+                auto& panes = l.panes;
+                auto& p = panes.at(0);
+                switch (l.type)
+                {
+                    case SIGNLE_PANE:
+                        {
+                            auto pane = _NewPane();
+                            _attachedPanes.insert({ p.id, pane });
+                            continue;
+                        }
+                    case SPLIT_HORIZONTAL:
+                        direction = SplitDirection::Left;
+                        scaleRoot = p.width;
+                        break;
+                    case SPLIT_VERTICAL:
+                        direction = SplitDirection::Up;
+                        scaleRoot = p.height;
+                        break;
+                }
+
+                std::shared_ptr<Pane> rootPane{ nullptr };
+                auto search = _attachedPanes.find(p.id);
+                if (search == _attachedPanes.end())
+                {
+                    rootPane = _NewPane();
+                    _attachedPanes.insert({ p.id, rootPane });
+                }
+                else
+                {
+                    rootPane = search->second;
+                }
+
+                for (size_t i = 1; i < panes.size(); i++)
+                {
+                    // Create and attach
+                    auto& p = panes.at(i);
+
+                    auto pane = _NewPane();
+                    _attachedPanes.insert({ p.id, pane });
+
+                    float splitSize;
+                    if (direction == SplitDirection::Left)
+                    {
+                        auto scalePane = panes.at(i).width;
+                        splitSize = (float)scalePane / (float)scaleRoot;
+                        scaleRoot -= scalePane;
+                    }
+                    else
+                    {
+                        auto scalePane = panes.at(i).height;
+                        splitSize = (float)scalePane / (float)scaleRoot;
+                        scaleRoot -= scalePane;
+                    }
+                    rootPane.get()->AttachPane(pane, direction, splitSize);
+                }
+            }
+        }
+
+        return true;
     }
 
     std::vector<TmuxControl::Layout> TmuxControl::_ParseLayout(std::wstring& layout)
@@ -503,7 +574,7 @@ namespace winrt::TerminalApp::implementation
             windows.push_back(w);
         }
 
-        tmux._SyncWindowState(windows);
+        //tmux._SyncWindowState(windows);
         return true;
     }
 

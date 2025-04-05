@@ -248,9 +248,10 @@ namespace winrt::TerminalApp::implementation
         // Private methods
         void _ListWindows(int windowId);
         void _RefreshClient();
-        std::shared_ptr<Pane> _NewPane(const Microsoft::Terminal::Settings::Model::NewTerminalArgs& newTerminalArgs);
+        //std::shared_ptr<Pane> _NewPane(const Microsoft::Terminal::Settings::Model::NewTerminalArgs& newTerminalArgs);
+        std::shared_ptr<Pane> _NewPane();
         void _NewTab();
-        bool _EventHandle(Event& e);
+        void _EventHandle(Event& e);
 
         bool _SyncWindowState(std::vector<TmuxWindow> windows);
         std::vector<Layout> _ParseLayout(std::wstring& layout);
