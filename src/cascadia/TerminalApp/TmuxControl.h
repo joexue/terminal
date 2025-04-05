@@ -107,48 +107,21 @@ namespace winrt::TerminalApp::implementation
             std::wstring response;
         } _event;
 
+        //=================================
+        // Commands section
+        //=================================
         struct Command
         {
         public:
             virtual std::wstring GetCommand() = 0;
-            virtual bool HandleResult(std::wstring& result, TmuxControl& tmux) = 0;
+            virtual bool HandleResult(std::wstring& /*result*/, TmuxControl& /*tmux*/) { return true; };
         };
 
-        struct ListWindows : public Command {
-        public:
-            std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
-
-            int32_t windowId;
-            int32_t sessionId;
-        };
-
-        struct ListPane : public Command
+        struct AttachDone : public Command
         {
         public:
             std::wstring GetCommand() override;
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
-
-            int32_t paneId;
-        };
-
-        struct Resize : public Command
-        {
-        public:
-            std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
-
-            int32_t paneId;
-        };
-
-        struct SendKey : public Command
-        {
-        public:
-            std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
-
-            int32_t paneId;
-            std::vector<wchar_t> keys;
         };
 
         struct CapturePane : public Command
@@ -160,14 +133,7 @@ namespace winrt::TerminalApp::implementation
             int32_t paneId;
         };
 
-        struct NewWindow : public Command
-        {
-        public:
-            std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
-        };
-
-        struct SplitPane : public Command
+        struct ListPanes : public Command
         {
         public:
             std::wstring GetCommand() override;
@@ -176,11 +142,43 @@ namespace winrt::TerminalApp::implementation
             int32_t paneId;
         };
 
-        struct SelectWindow : public Command
+        struct ListWindows : public Command {
+        public:
+            std::wstring GetCommand() override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+
+            int32_t windowId;
+            int32_t sessionId;
+        };
+
+        struct NewWindow : public Command
         {
         public:
             std::wstring GetCommand() override;
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+        };
+
+        struct ResizePane : public Command
+        {
+        public:
+            std::wstring GetCommand() override;
+
+            int32_t paneId;
+        };
+
+        struct ResizeWindow : public Command
+        {
+        public:
+            std::wstring GetCommand() override;
+            int width;
+            int height;
+            int windowId;
+        };
+
+        struct SelectWindow : public Command
+        {
+        public:
+            std::wstring GetCommand() override;
 
             int32_t windowId;
         };
@@ -189,27 +187,30 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int32_t paneId;
         };
 
-        struct AttachDone : public Command
+        struct SendKey : public Command
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+
+            int32_t paneId;
+            std::vector<wchar_t> keys;
         };
 
-        struct RefreshClient : public Command
+        struct SplitPane : public Command
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
-            int width;
-            int height;
+
+            int32_t paneId;
         };
 
+        //=================================
+        // Layout section
+        //=================================
         enum LayoutType : int
         {
             SIGNLE_PANE,
@@ -246,8 +247,6 @@ namespace winrt::TerminalApp::implementation
         };
 
         // Private methods
-        void _ListWindows(int windowId);
-        void _RefreshClient();
         //std::shared_ptr<Pane> _NewPane(const Microsoft::Terminal::Settings::Model::NewTerminalArgs& newTerminalArgs);
         std::shared_ptr<Pane> _NewPane();
         void _NewTab();
@@ -255,13 +254,14 @@ namespace winrt::TerminalApp::implementation
 
         bool _SyncWindowState(std::vector<TmuxWindow> windows);
         std::vector<Layout> _ParseLayout(std::wstring& layout);
-        bool _Parse(std::vector<wchar_t> buffer);
+        void _Parse(const std::wstring& buffer);
         bool _Advance(wchar_t ch);
 
         bool _KeyDown(wchar_t ch);
         void _SendCommand(std::unique_ptr<Command> cmd);
         void _ScheduleCommand();
-        void _Clean();
+        void _CloseSession();
+        void _StartSession();
         void _Response(std::wstring& result);
 
         // Private variables
@@ -272,9 +272,17 @@ namespace winrt::TerminalApp::implementation
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
         std::unordered_map<int, std::shared_ptr<Pane>> _attachedPanes;
+        std::unordered_map<int, TerminalApp::TerminalTab> _attachedTabs;
+        std::unordered_map<int, winrt::Microsoft::Terminal::Control::TermControl> _attachedControl;
 
         int _width;
         int _height;
         int _sessionId;
+
+        // Commands
+        void _CapturePane(int paneId);
+        void _ListWindows(int windowId);
+        void _ResizeWindow(int windowId, int width, int height);
+
     };
 }
