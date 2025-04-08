@@ -11,6 +11,11 @@ namespace winrt::Microsoft::Terminal::TerminalConnection::implementation
 {
     EchoConnection::EchoConnection() noexcept = default;
 
+    EchoConnection::EchoConnection(bool rawMode) noexcept :
+        _rawMode(rawMode)
+    {
+    }
+
     void EchoConnection::Start() noexcept
     {
     }
@@ -21,11 +26,11 @@ namespace winrt::Microsoft::Terminal::TerminalConnection::implementation
         std::wstringstream prettyPrint;
         for (const auto& wch : data)
         {
-            if (wch < 0x20)
+            if (!_rawMode && wch < 0x20)
             {
                 prettyPrint << L"^" << gsl::narrow_cast<wchar_t>(wch + 0x40);
             }
-            else if (wch == 0x7f)
+            else if (!_rawMode && wch == 0x7f)
             {
                 prettyPrint << L"0x7f";
             }

@@ -9,6 +9,7 @@ namespace Microsoft.Terminal.TerminalConnection
     runtimeclass EchoConnection : ITerminalConnection
     {
         EchoConnection();
+        EchoConnection(Boolean rawMode);
     };
 
 }

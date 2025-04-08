@@ -10,6 +10,7 @@ namespace winrt::Microsoft::Terminal::TerminalConnection::implementation
     struct EchoConnection : EchoConnectionT<EchoConnection>
     {
         EchoConnection() noexcept;
+        EchoConnection(bool rawMode) noexcept;
 
         void Start() noexcept;
         void WriteInput(const winrt::array_view<const char16_t> buffer);
@@ -23,6 +24,8 @@ namespace winrt::Microsoft::Terminal::TerminalConnection::implementation
 
         til::event<TerminalOutputHandler> TerminalOutput;
         til::typed_event<ITerminalConnection, IInspectable> StateChanged;
+
+        bool _rawMode { false };
     };
 }
 
