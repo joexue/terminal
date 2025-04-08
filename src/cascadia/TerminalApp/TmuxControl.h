@@ -263,6 +263,7 @@ namespace winrt::TerminalApp::implementation
         void _CloseSession();
         void _StartSession();
         void _Response(std::wstring& result);
+        std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
 
         // Private variables
         winrt::Windows::System::DispatcherQueue _dispatcherQueue{ nullptr };
