@@ -24,7 +24,9 @@ class Microsoft::Console::VirtualTerminal::ITermDispatch
 {
 public:
     using StringHandler = std::function<bool(const wchar_t)>;
-    using StringHandlerProducer = std::function<StringHandler(void)>;
+    using PrintHandler = std::function<void(const std::wstring_view)>;
+    // use this get the StringHandler, meanwhile pass the function to give app a function to print out bypass the parser
+    using StringHandlerProducer = std::function<StringHandler(PrintHandler)>;
 
 #pragma warning(push)
 #pragma warning(disable : 26432) // suppress rule of 5 violation on interface because tampering with this is fraught with peril

@@ -100,16 +100,14 @@ namespace winrt::TerminalApp::implementation
         struct Event
         {
             EventType type;
-            int32_t sessionId;
-            int32_t windowId;
-            int32_t paneId;
+            int sessionId;
+            int windowId;
+            int paneId;
 
             std::wstring response;
         } _event;
 
-        //=================================
-        // Commands section
-        //=================================
+        // Command structs
         struct Command
         {
         public:
@@ -130,7 +128,7 @@ namespace winrt::TerminalApp::implementation
             std::wstring GetCommand() override;
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
-            int32_t paneId;
+            int paneId;
         };
 
         struct ListPanes : public Command
@@ -139,7 +137,7 @@ namespace winrt::TerminalApp::implementation
             std::wstring GetCommand() override;
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
-            int32_t paneId;
+            int paneId;
         };
 
         struct ListWindows : public Command {
@@ -147,8 +145,8 @@ namespace winrt::TerminalApp::implementation
             std::wstring GetCommand() override;
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
-            int32_t windowId;
-            int32_t sessionId;
+            int windowId;
+            int sessionId;
         };
 
         struct NewWindow : public Command
@@ -163,7 +161,7 @@ namespace winrt::TerminalApp::implementation
         public:
             std::wstring GetCommand() override;
 
-            int32_t paneId;
+            int paneId;
         };
 
         struct ResizeWindow : public Command
@@ -180,7 +178,7 @@ namespace winrt::TerminalApp::implementation
         public:
             std::wstring GetCommand() override;
 
-            int32_t windowId;
+            int windowId;
         };
 
         struct SelectPane : public Command
@@ -188,7 +186,7 @@ namespace winrt::TerminalApp::implementation
         public:
             std::wstring GetCommand() override;
 
-            int32_t paneId;
+            int paneId;
         };
 
         struct SendKey : public Command
@@ -196,8 +194,16 @@ namespace winrt::TerminalApp::implementation
         public:
             std::wstring GetCommand() override;
 
-            int32_t paneId;
+            int paneId;
             std::vector<wchar_t> keys;
+        };
+
+        struct SetOption : public Command
+        {
+        public:
+            std::wstring GetCommand() override;
+
+            std::wstring option;
         };
 
         struct SplitPane : public Command
@@ -205,12 +211,10 @@ namespace winrt::TerminalApp::implementation
         public:
             std::wstring GetCommand() override;
 
-            int32_t paneId;
+            int paneId;
         };
 
-        //=================================
-        // Layout section
-        //=================================
+        // Layout structs
         enum LayoutType : int
         {
             SIGNLE_PANE,
@@ -247,9 +251,11 @@ namespace winrt::TerminalApp::implementation
         };
 
         // Private methods
-        //std::shared_ptr<Pane> _NewPane(const Microsoft::Terminal::Settings::Model::NewTerminalArgs& newTerminalArgs);
+        void _StartSession();
+        void _CloseSession();
+
         std::shared_ptr<Pane> _NewPane();
-        void _NewTab();
+
         void _EventHandle(Event& e);
 
         bool _SyncWindowState(std::vector<TmuxWindow> windows);
@@ -257,18 +263,23 @@ namespace winrt::TerminalApp::implementation
         void _Parse(const std::wstring& buffer);
         bool _Advance(wchar_t ch);
 
-        bool _KeyDown(wchar_t ch);
         void _SendCommand(std::unique_ptr<Command> cmd);
         void _ScheduleCommand();
-        void _CloseSession();
-        void _StartSession();
         void _Response(std::wstring& result);
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
+        void _KeyDownHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
+
+        // Command methods
+        void _CapturePane(int paneId);
+        void _ListWindows(int windowId);
+        void _ResizeWindow(int windowId, int width, int height);
+        void _SetOption(const std::wstring& option);
 
         // Private variables
-        winrt::Windows::System::DispatcherQueue _dispatcherQueue{ nullptr };
-        std::shared_ptr<Pane> _controlPane{ nullptr };
         TerminalPage& _page;
+        winrt::Microsoft::Terminal::Control::TermControl _core { nullptr };
+        winrt::Windows::System::DispatcherQueue _dispatcherQueue{ nullptr };
+        winrt::event_token _keyDownHandler;
 
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
@@ -279,11 +290,6 @@ namespace winrt::TerminalApp::implementation
         int _width;
         int _height;
         int _sessionId;
-
-        // Commands
-        void _CapturePane(int paneId);
-        void _ListWindows(int windowId);
-        void _ResizeWindow(int windowId, int width, int height);
 
     };
 }

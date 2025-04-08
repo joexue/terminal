@@ -82,21 +82,18 @@ namespace winrt::TerminalApp::implementation
     const std::wregex TmuxControl::REG_WINDOW_RENAMED{ L"^%window-renamed @\\d+ \\w+$" };
 
     TmuxControl::TmuxControl(TerminalPage& page, std::shared_ptr<Pane> pane) :
-        _controlPane(pane),
         _page(page)
     {
-        auto _core = _controlPane->GetTerminalControl();
+        _core = pane->GetTerminalControl();
 
-        _core.SetTmuxControlHandlerProducer([this]() {
+        _core.SetTmuxControlHandlerProducer([this](auto print) {
             _StartSession();
-            
+
+            print(L"Running the TMUX control mode, press 'q' to detach: ");
+
             return [this](const auto ch) mutable {
                 return _Advance(ch);
             };
-        });
-
-        _core.SetTmuxKeyHandler([this](const auto ch) mutable {
-            return _KeyDown(ch);
         });
 
         _dispatcherQueue = winrt::Windows::System::DispatcherQueue::GetForCurrentThread();
@@ -107,6 +104,44 @@ namespace winrt::TerminalApp::implementation
     {
     }
 
+    void TmuxControl::_StartSession()
+    {
+        _dispatcherQueue.TryEnqueue([this]() {
+            _state = State::ATTACHING;
+            _dcsBuffer.clear();
+
+            // FIXUP: the this may be the split panel, then the width and height is not full client size
+            _width = _core.ViewWidth();
+            _height = _core.ViewHeight();
+
+            _keyDownHandler = _core.KeyDown({ this, &TmuxControl::_KeyDownHandler });
+
+            tmux_log_open();
+        });
+    }
+
+    void TmuxControl::_CloseSession()
+    {
+        _dispatcherQueue.TryEnqueue([this]() {
+            _state = INIT;
+            _cmdQueue.clear();
+            _dcsBuffer.clear();
+            _cmdState = READY;
+
+            std::vector<winrt::TerminalApp::TabBase> tabs;
+            for (auto& t : _attachedTabs)
+            {
+                tabs.push_back(t.second);
+            }
+            _page._RemoveTabs(tabs);
+            _attachedPanes.clear();
+            _attachedTabs.clear();
+
+            _core.KeyDown(_keyDownHandler);
+
+            tmux_log_close();
+        });
+    }
 
     std::shared_ptr<Pane> TmuxControl::_NewPane()
     {
@@ -127,19 +162,6 @@ namespace winrt::TerminalApp::implementation
         return resultPane;
     }
 
-    void TmuxControl::_NewTab()
-    {
-#if 0
-        _dispatcherQueue.TryEnqueue([&]() {
-            NewTerminalArgs newContentArgs{ 0 };
-            //_page->_OpenNewTab(newTerminalArgs);
-            std::shared_ptr<Pane> p;
-            _page._CreateNewTabFromPane(p = _NewPane(newContentArgs));
-            _attachedPanes.insert({ 0, p });
-        });
-#endif
-    }
-
     void TmuxControl::_Response(std::wstring& result)
     {
         if (_cmdState == WAITING && _cmdQueue.size() > 0)
@@ -151,43 +173,6 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
-    void TmuxControl::_CloseSession()
-    {
-        _dispatcherQueue.TryEnqueue([this]() {
-            _state = INIT;
-            _cmdQueue.clear();
-            _dcsBuffer.clear();
-            _cmdState = READY;
-
-            std::vector<winrt::TerminalApp::TabBase> tabs;
-            for (auto& t : _attachedTabs)
-            {
-                tabs.push_back(t.second);
-            }
-            _page._RemoveTabs(tabs);
-            _attachedPanes.clear();
-            _attachedTabs.clear();
-
-            tmux_log_close();
-        });
-    }
-
-    void TmuxControl::_StartSession()
-    {
-        _dispatcherQueue.TryEnqueue([this]() {
-
-            auto _core = _controlPane->GetTerminalControl();
-            _state = State::ATTACHING;
-            _dcsBuffer.clear();
-
-            // FIXUP: the this may be the split panel, then the width and height is not full client size
-            _width = _core.ViewWidth();
-            _height = _core.ViewHeight();
-
-             tmux_log_open();
-        });
-    }
-
     void TmuxControl::_EventHandle(Event& e)
     {
 
@@ -196,6 +181,12 @@ namespace winrt::TerminalApp::implementation
         case SESSION_CHANGED:
         {
             _sessionId = e.sessionId;
+            // To make the TMUX pane size <= Windows terminal pane size, since
+            // Windows terminal use 2 characters as the separator while Tmux use
+            // 1.
+            _SetOption(L"pane-scrollbars on");
+            _SetOption(L"pane-scrollbars-position left");
+            _SetOption(L"pane-border-status top");
             _ListWindows(-1);
         }
         break;
@@ -348,30 +339,10 @@ namespace winrt::TerminalApp::implementation
                 continue;
             }
             tmux_log(L"   CMD: " + cmdStr);
-            auto _core = _controlPane->GetTerminalControl();
             _core.RawWriteString(cmdStr);
             return;
         }
         _cmdState = READY;
-    }
-
-    bool TmuxControl::_KeyDown(wchar_t ch)
-    {
-        if (_state != INIT)
-        {
-            // Only accept 'q' in tmux control pane
-            if (ch == 'q')
-            {
-                auto _core = _controlPane->GetTerminalControl();
-                tmux_log(L"   CMD: detach\n");
-                _core.RawWriteString(L"detach\n");
-            }
-            return true;
-        }
-        else
-        {
-            return false;
-        }
     }
 
     bool TmuxControl::_SyncWindowState(std::vector<TmuxWindow> windows)
@@ -384,9 +355,6 @@ namespace winrt::TerminalApp::implementation
             // we -2 to make it fit.
             auto direction = SplitDirection::Left;
             std::shared_ptr<Pane> rootPane{ nullptr };
-            int heightDecution = 0;
-            int widthDecution = 0;
-
             for (auto& l : w.layout)
             {
                 int scaleRoot;
@@ -406,12 +374,10 @@ namespace winrt::TerminalApp::implementation
                     case SPLIT_HORIZONTAL:
                         direction = SplitDirection::Left;
                         scaleRoot = p.width;
-                        widthDecution += (int)panes.size() * 2;
                         break;
                     case SPLIT_VERTICAL:
                         direction = SplitDirection::Up;
                         scaleRoot = p.height;
-                        heightDecution += (int)panes.size() * 2;
                         break;
                 }
 
@@ -422,7 +388,9 @@ namespace winrt::TerminalApp::implementation
                 {
                     targetPane = _NewPane();
                     _attachedPanes.insert({ p.id, targetPane });
+                    //targetPane->GetRootElement().KeyDown({ this, [&](auto, auto) { ; } });
                     //auto c = targetPane->GetTerminalControl();
+                    //c.KeyDown({ this, &TmuxControl::_KeyDownHandler });
                     //_attachedControl.insert({ p.id, c});
                     //_CapturePane(p.id);
                     if (rootPane == nullptr) {
@@ -465,7 +433,7 @@ namespace winrt::TerminalApp::implementation
             auto tab = _page._CreateNewTabFromPane(rootPane);
             _attachedTabs.insert({w.windowId, tab});
             rootPane = nullptr;
-            _ResizeWindow(w.windowId, _width - widthDecution, _height - heightDecution);
+            _ResizeWindow(w.windowId, _width, _height);
         }
 #if 1
         for (auto &p : _attachedPanes)
@@ -601,9 +569,7 @@ namespace winrt::TerminalApp::implementation
         return out;
     }
 
-    // ==============================
-    // Commands Section
-    // ==============================
+    // Commands
     void TmuxControl::_CapturePane(int paneId)
     {
         auto cmd = std::make_unique<CapturePane>();
@@ -623,7 +589,6 @@ namespace winrt::TerminalApp::implementation
         if (s == tmux._attachedPanes.end()) {
             return false;
         }
-        #if 1
         auto p = s->second;
 
         auto _core = p->GetTerminalControl();
@@ -632,17 +597,13 @@ namespace winrt::TerminalApp::implementation
 
         std::wstring out = L"";
         tmux._DecodeOutput(result, out);
-        if (_core != nullptr) {
-        _core.SendInput(out);
+        if (_core.ViewHeight() != 0) {
+            _core.SendInput(out);
+        } else {
+            //Not ready yet, redo it
+            tmux._CapturePane(this->paneId);
         }
-        #endif
-#if 0
-        auto t = tmux._attachedTabs.at(0);
-        auto tab = winrt::get_self<TerminalTab>(t);
-        auto p = tab->GetRootPane();
-        auto _core = p->GetTerminalControl();
-        _core.SendInput(result);
-        #endif
+
         return true;
     }
 
@@ -714,5 +675,28 @@ namespace winrt::TerminalApp::implementation
     std::wstring TmuxControl::ResizeWindow::GetCommand()
     {
         return std::wstring(std::format(L"resize-window -x {} -y {} -t @{}\n", this->width, this->height, this->windowId));
+    }
+
+    void TmuxControl::_SetOption(const std::wstring& option)
+    {
+        auto cmd = std::make_unique<SetOption>();
+        cmd->option = option;
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+    }
+
+    std::wstring TmuxControl::SetOption::GetCommand()
+    {
+        return std::wstring(std::format(L"set-option {}\n", this->option));
+    }
+
+    void TmuxControl::_KeyDownHandler(const Windows::Foundation::IInspectable& /*sender*/, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e)
+    {
+        if (e.Key() == winrt::Windows::System::VirtualKey::Q)
+        {
+            tmux_log(L"   CMD: detach\n");
+            _core.RawWriteString(L"detach\n");
+        }
+        e.Handled(true);
     }
 }

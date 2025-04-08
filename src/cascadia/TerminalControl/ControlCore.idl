@@ -68,7 +68,8 @@ namespace Microsoft.Terminal.Control
     };
 
     delegate Boolean TmuxDCSHandler(Char ch);
-    delegate TmuxDCSHandler TmuxDCSHandlerProducer();
+    delegate void PrintHandler(String str);
+    delegate TmuxDCSHandler TmuxDCSHandlerProducer(PrintHandler print);
 
     [default_interface] runtimeclass SelectionColor
     {
