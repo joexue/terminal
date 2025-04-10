@@ -17,7 +17,6 @@ namespace winrt::TerminalApp::implementation
     {
     public:
         TmuxControl(TerminalPage& page, std::shared_ptr<Pane> pane);
-        ~TmuxControl();
 
     private:
         static const std::wregex REG_BEGIN;
@@ -129,6 +128,8 @@ namespace winrt::TerminalApp::implementation
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int paneId;
+            int cursorX;
+            int cursorY;
         };
 
         struct ListPanes : public Command
@@ -137,10 +138,10 @@ namespace winrt::TerminalApp::implementation
             std::wstring GetCommand() override;
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
-            int paneId;
+            int windowId;
         };
 
-        struct ListWindows : public Command {
+        struct ListWindow : public Command {
         public:
             std::wstring GetCommand() override;
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
@@ -250,6 +251,16 @@ namespace winrt::TerminalApp::implementation
             std::vector<Layout> layout;
         };
 
+        struct TmuxPane
+        {
+            int sessionId;
+            int windowId;
+            int paneId;
+            int cursorX;
+            int cursorY;
+            bool active;
+        };
+
         // Private methods
         void _StartSession();
         void _CloseSession();
@@ -259,6 +270,7 @@ namespace winrt::TerminalApp::implementation
         void _EventHandle(Event& e);
 
         bool _SyncWindowState(std::vector<TmuxWindow> windows);
+        bool _SyncPaneState(std::vector<TmuxPane> panes);
         std::vector<Layout> _ParseLayout(std::wstring& layout);
         void _Parse(const std::wstring& buffer);
         bool _Advance(wchar_t ch);
@@ -270,8 +282,9 @@ namespace winrt::TerminalApp::implementation
         void _KeyDownHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
 
         // Command methods
-        void _CapturePane(int paneId);
-        void _ListWindows(int windowId);
+        void _CapturePane(int paneId, int cursorX, int cursorY);
+        void _ListWindow(int windowId);
+        void _ListPanes(int windowId);
         void _ResizeWindow(int windowId, int width, int height);
         void _SetOption(const std::wstring& option);
 

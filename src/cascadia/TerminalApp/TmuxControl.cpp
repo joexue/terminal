@@ -100,10 +100,6 @@ namespace winrt::TerminalApp::implementation
         return;
     }
 
-    TmuxControl::~TmuxControl()
-    {
-    }
-
     void TmuxControl::_StartSession()
     {
         _dispatcherQueue.TryEnqueue([this]() {
@@ -187,7 +183,7 @@ namespace winrt::TerminalApp::implementation
             _SetOption(L"pane-scrollbars on");
             _SetOption(L"pane-scrollbars-position left");
             _SetOption(L"pane-border-status top");
-            _ListWindows(-1);
+            _ListWindow(-1);
         }
         break;
         case RESPONSE:
@@ -345,6 +341,22 @@ namespace winrt::TerminalApp::implementation
         _cmdState = READY;
     }
 
+    bool TmuxControl::_SyncPaneState(std::vector<TmuxPane> panes)
+    {
+        for (auto& p : panes)
+        {
+            auto search = _attachedPanes.find(p.paneId);
+            if (search == _attachedPanes.end())
+            {
+                continue;
+            }
+
+            _CapturePane(p.paneId, p.cursorX, p.cursorY);
+        }
+
+        return true;
+    }
+
     bool TmuxControl::_SyncWindowState(std::vector<TmuxWindow> windows)
     {
         for (auto& w : windows)
@@ -434,8 +446,9 @@ namespace winrt::TerminalApp::implementation
             _attachedTabs.insert({w.windowId, tab});
             rootPane = nullptr;
             _ResizeWindow(w.windowId, _width, _height);
+            _ListPanes(w.windowId);
         }
-#if 1
+#if 0
         for (auto &p : _attachedPanes)
         {
             _CapturePane(p.first);
@@ -570,10 +583,12 @@ namespace winrt::TerminalApp::implementation
     }
 
     // Commands
-    void TmuxControl::_CapturePane(int paneId)
+    void TmuxControl::_CapturePane(int paneId, int cursorX, int cursorY)
     {
         auto cmd = std::make_unique<CapturePane>();
         cmd->paneId = paneId;
+        cmd->cursorX = cursorX;
+        cmd->cursorY = cursorY;
         _SendCommand(std::move(cmd));
         _ScheduleCommand();
     }
@@ -589,34 +604,91 @@ namespace winrt::TerminalApp::implementation
         if (s == tmux._attachedPanes.end()) {
             return false;
         }
-        auto p = s->second;
 
-        auto _core = p->GetTerminalControl();
+        auto _core = s->second->GetTerminalControl();
 
-        result.pop_back();
-
-        std::wstring out = L"";
-        tmux._DecodeOutput(result, out);
         if (_core.ViewHeight() != 0) {
+            std::wstring out = L"";
+            result.pop_back();
+            tmux._DecodeOutput(result, out);
+
+            // Cursor control, for some reason, windows terminal starts from 1 not 0, so we +1 for each
+            out += std::format(L"\033[{};{}H", this->cursorY + 1, this->cursorX + 1);
             _core.SendInput(out);
+
         } else {
             //Not ready yet, redo it
-            tmux._CapturePane(this->paneId);
+            tmux._CapturePane(this->paneId, this->cursorX, this->cursorY);
         }
 
         return true;
     }
 
-    void TmuxControl::_ListWindows(int windowId)
+    void TmuxControl::_ListPanes(int windowId)
     {
-        auto cmd = std::make_unique<ListWindows>();
+        auto cmd = std::make_unique<ListPanes>();
+        cmd->windowId = windowId;
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+    }
+
+    std::wstring TmuxControl::ListPanes::GetCommand()
+    {
+        return std::wstring(std::format(L"list-panes -F '"
+                                        L"#{{session_id}} #{{window_id}} #{{pane_id}} "
+                                        L"#{{cursor_x}} #{{cursor_y}} "
+                                        L"#{{pane_active}}"
+                                        L"' -t ${}\n",
+                                        this->windowId));
+    }
+
+    bool TmuxControl::ListPanes::HandleResult(std::wstring& result, TmuxControl& tmux)
+    {
+        std::wstring line;
+        std::wregex REG_PANE{ L"^\\$(\\d+) @(\\d+) %(\\d+) (\\d+) (\\d+) (\\d+)$" };
+        std::vector<TmuxPane> panes;
+
+        std::wstringstream in;
+        in.str(result);
+
+        while (std::getline(in, line, L'\n'))
+        {
+            TmuxPane p;
+            std::wsmatch matches;
+
+            if (!std::regex_match(line, matches, REG_PANE))
+            {
+                continue;
+            }
+
+            p.sessionId = std::stoi(matches.str(1));
+            p.windowId = std::stoi(matches.str(2));
+            p.paneId = std::stoi(matches.str(3));
+            p.cursorX = std::stoi(matches.str(4));
+            p.cursorY = std::stoi(matches.str(5));
+            p.active = (std::stoi(matches.str(6)) == 1);
+
+            std::wstring log(std::format(L"pane: {} {} {} {} {} {}\n", p.sessionId, p.windowId, p.paneId, p.cursorX, p.cursorY, p.active));
+            tmux_log(L"   LOG: " + log);
+
+            panes.push_back(p);
+        }
+
+
+        tmux._SyncPaneState(panes);
+        return true;
+    }
+
+    void TmuxControl::_ListWindow(int windowId)
+    {
+        auto cmd = std::make_unique<ListWindow>();
         cmd->windowId = windowId;
         cmd->sessionId = _sessionId;
         _SendCommand(std::move(cmd));
         _ScheduleCommand();
     }
 
-    std::wstring TmuxControl::ListWindows::GetCommand()
+    std::wstring TmuxControl::ListWindow::GetCommand()
     {
         return std::wstring(std::format(L"list-windows -F '"
                                         L"#{{session_id}} #{{window_id}} "
@@ -627,7 +699,7 @@ namespace winrt::TerminalApp::implementation
                                         L"' -t ${}\n", this->sessionId));
     }
 
-    bool TmuxControl::ListWindows::HandleResult(std::wstring& result, TmuxControl& tmux)
+    bool TmuxControl::ListWindow::HandleResult(std::wstring& result, TmuxControl& tmux)
     {
         std::wstring line;
         std::wregex REG_WINDOW{ L"^\\$(\\d+) @(\\d+) (\\d+) (\\d+) (\\d+) ([\\dabcdefABCDEF]{4}),([\\S]+) (\\d+)$" };
