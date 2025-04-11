@@ -290,6 +290,7 @@ namespace winrt::TerminalApp::implementation
 
         // Private variables
         TerminalPage& _page;
+        winrt::Microsoft::Terminal::Settings::Model::Profile _profile;
         winrt::Microsoft::Terminal::Control::TermControl _core { nullptr };
         winrt::Windows::System::DispatcherQueue _dispatcherQueue{ nullptr };
         winrt::event_token _keyDownHandler;

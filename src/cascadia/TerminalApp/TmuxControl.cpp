@@ -85,6 +85,7 @@ namespace winrt::TerminalApp::implementation
         _page(page)
     {
         _core = pane->GetTerminalControl();
+        _profile = pane->GetProfile();
 
         _core.SetTmuxControlHandlerProducer([this](auto print) {
             _StartSession();
@@ -104,11 +105,23 @@ namespace winrt::TerminalApp::implementation
     {
         _dispatcherQueue.TryEnqueue([this]() {
             _state = State::ATTACHING;
-            _dcsBuffer.clear();
 
-            // FIXUP: the this may be the split panel, then the width and height is not full client size
-            _width = _core.ViewWidth();
-            _height = _core.ViewHeight();
+            // Calculate our dimension
+            auto x = _page.ActualWidth();
+            auto y = _page.ActualHeight();
+            auto fontSize = _core.CharacterDimensions();
+
+            _width = (int)(x / fontSize.Width);
+            _height = (int)(y / fontSize.Height);
+
+            // Change the padding, otherwise the split panes will not match tmux panes size.
+            // 2 is the separator size, constant for now.
+            // Same reason, we make the scroll bar hidden.
+            auto paddingX = (fontSize.Width - 2) / 2;
+            auto paddingY = (fontSize.Height - 2) / 2;
+
+            _profile.Padding(std::format(L"0, {}, 0, {}", paddingX, paddingY));
+            _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
 
             _keyDownHandler = _core.KeyDown({ this, &TmuxControl::_KeyDownHandler });
 
@@ -147,13 +160,21 @@ namespace winrt::TerminalApp::implementation
 
         TerminalSettingsCreateResult controlSettings{ nullptr };
 
-        const auto& profile = _page._settings.GetProfileForArgs(newTerminalArgs);
+        //const auto& profile = _page._settings.GetProfileForArgs(newTerminalArgs);
+        //_profile.Padding(L"0,0,0,4");
+        //_profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
+        controlSettings = TerminalSettings::CreateWithProfile(_page._settings, _profile, *_page._bindings);
+        //controlSettings.DefaultSettings().Padding() = { L"0, 0, 0, 0" };
+        //controlSettings.DefaultSettings().
+        //TerminalSettings settings;
+        //settings        controlSettings.DefaultSettings().Padding(box_value(hstring(L"4,4,4,4")));
+        auto p = controlSettings.DefaultSettings().Padding();
 
-        controlSettings = TerminalSettings::CreateWithProfile(_page._settings, profile, *_page._bindings);
+        (void)p;
         const auto control = _page._CreateNewControlAndContent(controlSettings, connection);
+        //const auto control = _page._CreateNewControlAndContent(settings, connection);
 
-
-        auto paneContent{ winrt::make<TerminalPaneContent> (profile, _page._terminalSettingsCache, control) };
+        auto paneContent{ winrt::make<TerminalPaneContent> (_profile, _page._terminalSettingsCache, control) };
         auto resultPane = std::make_shared<Pane>(paneContent);
         return resultPane;
     }
@@ -180,9 +201,9 @@ namespace winrt::TerminalApp::implementation
             // To make the TMUX pane size <= Windows terminal pane size, since
             // Windows terminal use 2 characters as the separator while Tmux use
             // 1.
-            _SetOption(L"pane-scrollbars on");
-            _SetOption(L"pane-scrollbars-position left");
-            _SetOption(L"pane-border-status top");
+            //_SetOption(L"pane-scrollbars on");
+            //_SetOption(L"pane-scrollbars-position left");
+            //_SetOption(L"pane-border-status top");
             _ListWindow(-1);
         }
         break;
