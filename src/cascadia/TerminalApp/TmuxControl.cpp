@@ -107,20 +107,20 @@ namespace winrt::TerminalApp::implementation
             _state = State::ATTACHING;
 
             // Calculate our dimension
-            auto x = _page.ActualWidth();
-            auto y = _page.ActualHeight();
-            auto fontSize = _core.CharacterDimensions();
-
-            _width = (int)(x / fontSize.Width);
-            _height = (int)(y / fontSize.Height);
-
+            
             // Change the padding, otherwise the split panes will not match tmux panes size.
             // 2 is the separator size, constant for now.
             // Same reason, we make the scroll bar hidden.
-            auto paddingX = (fontSize.Width - 2) / 2;
-            auto paddingY = (fontSize.Height - 2) / 2;
+            auto fontSize = _core.CharacterDimensions();
+            //auto paddingX = (int)(fontSize.Width / 2);
+            //auto paddingY = (int)(fontSize.Height / 2);
 
-            _profile.Padding(std::format(L"0, {}, 0, {}", paddingX, paddingY));
+            auto x = _page.ActualWidth();
+            auto y = _page.ActualHeight();
+            _width = (int)(x / fontSize.Width);
+            _height = (int)(y / fontSize.Height);
+
+            _profile.Padding(std::format(L"0, 0, {}, {}", 0, 0));
             _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
 
             _keyDownHandler = _core.KeyDown({ this, &TmuxControl::_KeyDownHandler });
@@ -154,25 +154,11 @@ namespace winrt::TerminalApp::implementation
 
     std::shared_ptr<Pane> TmuxControl::_NewPane()
     {
-        NewTerminalArgs newTerminalArgs{ 0 };
-        TerminalConnection::ITerminalConnection connection{ nullptr };
-        connection = TerminalConnection::EchoConnection{true};
+        auto connection = TerminalConnection::EchoConnection{true};
+        //TerminalSettingsCreateResult controlSettings{ nullptr };
 
-        TerminalSettingsCreateResult controlSettings{ nullptr };
-
-        //const auto& profile = _page._settings.GetProfileForArgs(newTerminalArgs);
-        //_profile.Padding(L"0,0,0,4");
-        //_profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
-        controlSettings = TerminalSettings::CreateWithProfile(_page._settings, _profile, *_page._bindings);
-        //controlSettings.DefaultSettings().Padding() = { L"0, 0, 0, 0" };
-        //controlSettings.DefaultSettings().
-        //TerminalSettings settings;
-        //settings        controlSettings.DefaultSettings().Padding(box_value(hstring(L"4,4,4,4")));
-        auto p = controlSettings.DefaultSettings().Padding();
-
-        (void)p;
+        auto controlSettings = TerminalSettings::CreateWithProfile(_page._settings, _profile, *_page._bindings);
         const auto control = _page._CreateNewControlAndContent(controlSettings, connection);
-        //const auto control = _page._CreateNewControlAndContent(settings, connection);
 
         auto paneContent{ winrt::make<TerminalPaneContent> (_profile, _page._terminalSettingsCache, control) };
         auto resultPane = std::make_shared<Pane>(paneContent);
@@ -204,7 +190,8 @@ namespace winrt::TerminalApp::implementation
             //_SetOption(L"pane-scrollbars on");
             //_SetOption(L"pane-scrollbars-position left");
             //_SetOption(L"pane-border-status top");
-            _ListWindow(-1);
+            //_ListWindow(-1);
+            _DiscoverWindows(_sessionId);
         }
         break;
         case RESPONSE:
@@ -401,7 +388,7 @@ namespace winrt::TerminalApp::implementation
                             _attachedPanes.insert({ p.id, rootPane });
                             //auto c = rootPane->GetTerminalControl();
                             //_attachedControl.insert({ p.id, c});
-                            _ResizeWindow(w.windowId, _width, _height);
+                            //_ResizeWindow(w.windowId, _width, _height);
                             continue;
                         }
                     case SPLIT_HORIZONTAL:
@@ -449,13 +436,13 @@ namespace winrt::TerminalApp::implementation
                     if (direction == SplitDirection::Left)
                     {
                         auto scalePane = panes.at(i).width;
-                        splitSize = (float)scalePane / (float)scaleRoot;
+                        splitSize = 1.0f - (float)scalePane / (float)scaleRoot;
                         scaleRoot -= scalePane;
                     }
                     else
                     {
                         auto scalePane = panes.at(i).height;
-                        splitSize = (float)scalePane / (float)scaleRoot;
+                        splitSize = 1.0f - (float)scalePane / (float)scaleRoot;
                         scaleRoot -= scalePane;
                     }
                     targetPane = targetPane->AttachPane(pane, direction, splitSize);
@@ -466,7 +453,7 @@ namespace winrt::TerminalApp::implementation
             auto tab = _page._CreateNewTabFromPane(rootPane);
             _attachedTabs.insert({w.windowId, tab});
             rootPane = nullptr;
-            _ResizeWindow(w.windowId, _width, _height);
+            //_ResizeWindow(w.windowId, _width, _height);
             _ListPanes(w.windowId);
         }
 #if 0
@@ -635,13 +622,53 @@ namespace winrt::TerminalApp::implementation
 
             // Cursor control, for some reason, windows terminal starts from 1 not 0, so we +1 for each
             out += std::format(L"\033[{};{}H", this->cursorY + 1, this->cursorX + 1);
-            _core.SendInput(out);
+            _core.SendInput(out + std::format(L" {}x{}", _core.ViewWidth(), _core.ViewHeight()));
 
         } else {
             //Not ready yet, redo it
             tmux._CapturePane(this->paneId, this->cursorX, this->cursorY);
         }
 
+        return true;
+    }
+
+    void TmuxControl::_DiscoverWindows(int sessionId)
+    {
+        auto cmd = std::make_unique<DiscoverWindows>();
+        cmd->sessionId = sessionId;
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+    }
+
+    std::wstring TmuxControl::DiscoverWindows::GetCommand()
+    {
+        return std::wstring(std::format(L"list-windows -F '"
+                                        L"#{{window_id}}"
+                                        L"' -t ${}\n", this->sessionId));
+    }
+
+    bool TmuxControl::DiscoverWindows::HandleResult(std::wstring& result, TmuxControl& tmux)
+    {
+        std::wstring line;
+        std::wregex REG_WINDOW{ L"^@(\\d+)$" };
+
+        std::wstringstream in;
+        in.str(result);
+
+        while (std::getline(in, line, L'\n'))
+        {
+            std::wsmatch matches;
+
+            if (!std::regex_match(line, matches, REG_WINDOW)) {
+                continue;
+            }
+            int windowId = std::stoi(matches.str(1));
+            std::wstring log(std::format(L"window: {}\n", windowId));
+            tmux_log(L"   LOG: " + log);
+            tmux._ResizeWindow(windowId, tmux._width, tmux._height);
+        }
+
+        tmux._ListWindow(-1);
         return true;
     }
 

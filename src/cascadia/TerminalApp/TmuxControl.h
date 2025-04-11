@@ -132,6 +132,14 @@ namespace winrt::TerminalApp::implementation
             int cursorY;
         };
 
+        struct DiscoverWindows : public Command {
+        public:
+            std::wstring GetCommand() override;
+            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+
+            int sessionId;
+        };
+
         struct ListPanes : public Command
         {
         public:
@@ -283,6 +291,7 @@ namespace winrt::TerminalApp::implementation
 
         // Command methods
         void _CapturePane(int paneId, int cursorX, int cursorY);
+        void _DiscoverWindows(int sessionId);
         void _ListWindow(int windowId);
         void _ListPanes(int windowId);
         void _ResizeWindow(int windowId, int width, int height);
