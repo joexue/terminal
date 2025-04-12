@@ -6,6 +6,7 @@
 #include <regex>
 #include <vector>
 #include <unordered_map>
+#include "../../terminal/input/terminalInput.hpp"
 
 #include "Pane.h"
 
@@ -204,7 +205,8 @@ namespace winrt::TerminalApp::implementation
             std::wstring GetCommand() override;
 
             int paneId;
-            std::vector<wchar_t> keys;
+            //std::vector<wchar_t> keys;
+            std::wstring keys;
             wchar_t key;
         };
 
@@ -276,6 +278,7 @@ namespace winrt::TerminalApp::implementation
 
         std::shared_ptr<Pane> _NewPane(int paneId);
 
+
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
         void _Output(int paneId, const std::wstring& result);
         void _Response(std::wstring& result);
@@ -291,6 +294,8 @@ namespace winrt::TerminalApp::implementation
         void _SendCommand(std::unique_ptr<Command> cmd);
         void _ScheduleCommand();
         void _KeyDownHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
+        void _PaneKeyDownHandler(int paneId, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
+        void _RegisterPaneKeyHandler(int paneId, std::shared_ptr<Pane> pane);
 
         // Command methods
         void _AttachDone();
@@ -299,7 +304,7 @@ namespace winrt::TerminalApp::implementation
         void _ListWindow(int windowId);
         void _ListPanes(int windowId);
         void _ResizeWindow(int windowId, int width, int height);
-        void _SendKey(int paneId, wchar_t ch);
+        void _SendKey(int paneId, const std::wstring keys);
         void _SetOption(const std::wstring& option);
 
         // Private variables
@@ -314,6 +319,7 @@ namespace winrt::TerminalApp::implementation
         std::unordered_map<int, std::shared_ptr<Pane>> _attachedPanes;
         std::unordered_map<int, TerminalApp::TerminalTab> _attachedTabs;
         std::unordered_map<int, winrt::Microsoft::Terminal::Control::TermControl> _attachedControl;
+        //::Microsoft::Console::VirtualTerminal::TerminalInput _termInput;
 
         int _width;
         int _height;

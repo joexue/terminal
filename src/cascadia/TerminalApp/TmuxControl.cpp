@@ -48,6 +48,7 @@ using namespace winrt::Microsoft::Terminal::TerminalConnection;
 using winrt::Microsoft::Terminal::Settings::Model::SplitDirection;
 using namespace winrt::Windows::UI;
 using namespace winrt::Windows::UI::Core;
+using namespace Microsoft::Console::VirtualTerminal;
 
 namespace winrt::TerminalApp::implementation
 {
@@ -158,9 +159,70 @@ namespace winrt::TerminalApp::implementation
             tmux_log(L"   CMD: detach\n");
             _core.RawWriteString(L"detach\n");
         }
-        //e.OriginalKey();
-        //e.KeyStatus().ScanCode();
         e.Handled(true);
+    }
+
+    // Poor version keymap
+    void TmuxControl::_PaneKeyDownHandler(int paneId, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e)
+    {
+        auto vk = (UINT)e.Key();
+        std::vector<BYTE> keys(256, 0);
+
+        if (!GetKeyboardState(&keys[0]))
+        {
+            return;
+        }
+
+        int sc = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+
+        WCHAR buffer[4];
+        auto rc = ToUnicode(vk, sc, &keys[0], buffer, 4, 0);
+
+        if (rc > 0)
+        {
+            std::wstring keys(buffer, rc);
+            _SendKey(paneId, keys);
+            e.Handled(true);
+            return;
+        }
+
+        std::wstring out = L"";
+
+        if (e.Key() == winrt::Windows::System::VirtualKey::Up)
+        {
+            out = L"\033[A";
+        }
+        else if (e.Key() == winrt::Windows::System::VirtualKey::Down)
+        {
+            out = L"\033[B";
+        }
+        else if (e.Key() == winrt::Windows::System::VirtualKey::Left)
+        {
+            out = L"\033[C";
+        }
+        else if (e.Key() == winrt::Windows::System::VirtualKey::Right)
+        {
+            out = L"\033[D";
+        }
+
+        if (out.size() > 0)
+        {
+            _SendKey(paneId, out);
+            e.Handled(true);
+            return;
+        }
+    }
+
+    void TmuxControl::_RegisterPaneKeyHandler(int paneId, std::shared_ptr<Pane> pane)
+    {
+        pane->GetRootElement().PreviewKeyDown([this, pane, paneId](auto& /*s*/, auto& e) {
+            auto c = pane->GetTerminalControl();
+            if (c == nullptr)
+            {
+                return;
+            }
+            _PaneKeyDownHandler(paneId, e);
+        });
     }
 
     std::shared_ptr<Pane> TmuxControl::_NewPane(int paneId)
@@ -174,27 +236,13 @@ namespace winrt::TerminalApp::implementation
         auto paneContent{ winrt::make<TerminalPaneContent> (_profile, _page._terminalSettingsCache, control) };
         auto resultPane = std::make_shared<Pane>(paneContent);
 
+        _RegisterPaneKeyHandler(paneId, resultPane);
+        #if 0
         auto c = resultPane->GetTerminalControl();
         c.KeyDown([this, paneId](auto& /*s*/, auto& e) {
-            auto vk = (UINT)e.Key();
-            std::vector<BYTE> keys(256, 0);
-
-            if (!GetKeyboardState(&keys[0]))
-            {
-                return;
-            }
-
-            int sc = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
-
-            WCHAR buffer[4];
-            auto rc = ToUnicode(vk, sc, &keys[0], buffer, 4, 4);
-
-            if (rc > 0)
-            {
-                _SendKey(paneId, buffer[0]);
-            }
-            e.Handled(true);
+            _PaneKeyDownHandler(paneId, e);
         });
+        #endif
 
         return resultPane;
     }
@@ -526,6 +574,7 @@ namespace winrt::TerminalApp::implementation
                         scaleRoot -= scalePane;
                     }
                     targetPane = targetPane->AttachPane(pane, direction, splitSize);
+                    _RegisterPaneKeyHandler(targetPandId, targetPane);
                     _attachedPanes.insert_or_assign(targetPandId, targetPane);
                     //_CapturePane(p.id);
                 }
@@ -907,11 +956,11 @@ namespace winrt::TerminalApp::implementation
         return std::wstring(std::format(L"resize-window -x {} -y {} -t @{}\n", this->width, this->height, this->windowId));
     }
 
-    void TmuxControl::_SendKey(int paneId, wchar_t ch)
+    void TmuxControl::_SendKey(int paneId, const std::wstring keys)
     {
         auto cmd = std::make_unique<SendKey>();
         cmd->paneId = paneId;
-        cmd->key = ch;
+        cmd->keys = keys;
 
         _SendCommand(std::move(cmd));
         _ScheduleCommand();
@@ -919,7 +968,13 @@ namespace winrt::TerminalApp::implementation
 
     std::wstring TmuxControl::SendKey::GetCommand()
     {
-        return std::wstring(std::format(L"send-key -t %{} {:#x}\n", this->paneId, this->key));
+        std::wstring out = L"";
+        for (auto & c : this->keys)
+        {
+            out += std::format(L"{:#x} ", c);
+        }
+
+        return std::wstring(std::format(L"send-key -t %{} {}\n", this->paneId, out));
     }
 
 
