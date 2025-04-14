@@ -196,11 +196,11 @@ namespace winrt::TerminalApp::implementation
         {
             out = L"\033[B";
         }
-        else if (e.Key() == winrt::Windows::System::VirtualKey::Left)
+        else if (e.Key() == winrt::Windows::System::VirtualKey::Right)
         {
             out = L"\033[C";
         }
-        else if (e.Key() == winrt::Windows::System::VirtualKey::Right)
+        else if (e.Key() == winrt::Windows::System::VirtualKey::Left)
         {
             out = L"\033[D";
         }
@@ -227,7 +227,7 @@ namespace winrt::TerminalApp::implementation
 
     std::shared_ptr<Pane> TmuxControl::_NewPane(int paneId)
     {
-        auto connection = TerminalConnection::EchoConnection{true};
+        auto connection = TerminalConnection::DumyConnection{};
         //TerminalSettingsCreateResult controlSettings{ nullptr };
 
         auto controlSettings = TerminalSettings::CreateWithProfile(_page._settings, _profile, *_page._bindings);
@@ -264,7 +264,7 @@ namespace winrt::TerminalApp::implementation
         auto c = p->GetTerminalControl();
         std::wstring out = L"";
         _DecodeOutput(result, out);
-        c.SendInput(out);
+        c.SendOutput(out);
     }
 
     void TmuxControl::_Response(std::wstring& result)
@@ -583,7 +583,9 @@ namespace winrt::TerminalApp::implementation
             _attachedTabs.insert({w.windowId, tab});
             rootPane = nullptr;
 
-            //tab.Title(w.name);
+            tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ w.name });
+            
+            //SetTabText(w.name);
             //_ResizeWindow(w.windowId, _width, _height);
             _ListPanes(w.windowId);
         }
@@ -780,7 +782,7 @@ namespace winrt::TerminalApp::implementation
             // Cursor control, for some reason, windows terminal starts from 1 not 0, so we +1 for each
             out += std::format(L"\033[{};{}H", this->cursorY + 1, this->cursorX + 1);
             //_core.SendInput(out + std::format(L" {}x{}", _core.ViewWidth(), _core.ViewHeight()));
-            _core.SendInput(out);
+            _core.SendOutput(out);
 
         } else {
             //Not ready yet, redo it
@@ -901,6 +903,7 @@ namespace winrt::TerminalApp::implementation
                                         L"#{{window_width}} #{{window_height}} "
                                         L"#{{window_active}} "
                                         L"#{{window_layout}} "
+                                        L"#{{window_name}} "
                                         L"#{{history_limit}}"
                                         L"' -t ${}\n", this->sessionId));
     }
@@ -908,7 +911,7 @@ namespace winrt::TerminalApp::implementation
     bool TmuxControl::ListWindow::HandleResult(std::wstring& result, TmuxControl& tmux)
     {
         std::wstring line;
-        std::wregex REG_WINDOW{ L"^\\$(\\d+) @(\\d+) (\\d+) (\\d+) (\\d+) ([\\dabcdefABCDEF]{4}),(\\S+) (\\d+)$" };
+        std::wregex REG_WINDOW{ L"^\\$(\\d+) @(\\d+) (\\d+) (\\d+) (\\d+) ([\\dabcdefABCDEF]{4}),(\\S+) (\\S+) (\\d+)$" };
         std::vector<TmuxWindow> windows;
 
         std::wstringstream in;
@@ -928,7 +931,8 @@ namespace winrt::TerminalApp::implementation
             w.height = std::stoi(matches.str(4));
             w.active = (std::stoi(matches.str(5)) == 1);
             w.layoutCsum = matches.str(6);
-            w.historyLimit = std::stoi(matches.str(8));
+            w.name = matches.str(8);
+            w.historyLimit = std::stoi(matches.str(9));
             std::wstring layout(matches.str(7));
             w.layout = tmux._ParseLayout(layout);
             std::wstring log(std::format(L"window: {} {} {} {} {} {} {}\n", w.sessionId, w.windowId, w.width, w.height, w.active, w.historyLimit, matches.str(7)));

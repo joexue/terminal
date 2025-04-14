@@ -471,6 +471,7 @@ namespace winrt::Microsoft::Terminal::Control::implementation
             return;
         }
 
+        auto lock = _terminal->LockForWriting();
         _terminal->Write(wstr);
     }
 
