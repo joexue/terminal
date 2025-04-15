@@ -131,6 +131,7 @@ namespace winrt::TerminalApp::implementation
             int paneId;
             int cursorX;
             int cursorY;
+            int history;
         };
 
         struct DiscoverWindows : public Command {
@@ -148,6 +149,7 @@ namespace winrt::TerminalApp::implementation
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
             int windowId;
+            int history;
         };
 
         struct ListWindow : public Command {
@@ -255,7 +257,7 @@ namespace winrt::TerminalApp::implementation
             int windowId;
             int width;
             int height;
-            int historyLimit;
+            int history;
             bool active;
             std::wstring name;
             std::wstring layoutCsum;
@@ -274,7 +276,7 @@ namespace winrt::TerminalApp::implementation
 
         // Private methods
         void _StartSession();
-        void _CloseSession();
+        void _StopSession();
 
         std::shared_ptr<Pane> _NewPane(int paneId);
 
@@ -286,7 +288,7 @@ namespace winrt::TerminalApp::implementation
         void _WindowClose(int windowId);
 
         bool _SyncWindowState(std::vector<TmuxWindow> windows);
-        bool _SyncPaneState(std::vector<TmuxPane> panes);
+        bool _SyncPaneState(std::vector<TmuxPane> panes, int history);
         std::vector<Layout> _ParseLayout(std::wstring& layout);
         void _Parse(const std::wstring& buffer);
         bool _Advance(wchar_t ch);
@@ -299,10 +301,10 @@ namespace winrt::TerminalApp::implementation
 
         // Command methods
         void _AttachDone();
-        void _CapturePane(int paneId, int cursorX, int cursorY);
+        void _CapturePane(int paneId, int cursorX, int cursorY, int history);
         void _DiscoverWindows(int sessionId);
         void _ListWindow(int windowId);
-        void _ListPanes(int windowId);
+        void _ListPanes(int windowId, int history);
         void _ResizeWindow(int windowId, int width, int height);
         void _SendKey(int paneId, const std::wstring keys);
         void _SetOption(const std::wstring& option);
