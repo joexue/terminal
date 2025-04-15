@@ -12,6 +12,7 @@
 #include "TmuxControl.h"
 #include "TerminalPage.h"
 #include "TmuxPaneContent.h"
+#include "TabRowControl.h"
 
 // To be deleted
 #include <fstream>
@@ -48,7 +49,7 @@ using namespace winrt::Microsoft::Terminal::TerminalConnection;
 using winrt::Microsoft::Terminal::Settings::Model::SplitDirection;
 using namespace winrt::Windows::UI;
 using namespace winrt::Windows::UI::Core;
-using namespace Microsoft::Console::VirtualTerminal;
+//using namespace Microsoft::Console::VirtualTerminal;
 
 namespace winrt::TerminalApp::implementation
 {
@@ -123,6 +124,18 @@ namespace winrt::TerminalApp::implementation
 
             _keyDownHandler = _core.KeyDown({ this, &TmuxControl::_KeyDownHandler });
 
+            auto tabRow = _page.TabRow();
+            auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
+            auto _newTabButton = tabRowImpl->NewTabButton();
+#if 0
+            _newTabButtonHandler = _newTabButton.Click([this](auto&&, auto&&) {
+                _NewWindow();
+            });
+#endif
+            _newTabButtonHandler = _newTabButton.Click({ this, &TmuxControl::_NewTabButtonHandler });
+
+            _newTabButton.AllowDrop(false);
+
             tmux_log_open();
         });
     }
@@ -145,8 +158,11 @@ namespace winrt::TerminalApp::implementation
             _attachedTabs.clear();
 
             _core.KeyDown(_keyDownHandler);
+            //_newTabButton.Click(_newTabButtonHandler);
+            //_newTabButton.AllowDrop(true);
 
             _core.RawWriteString(L"\n");
+
             tmux_log_close();
         });
     }
@@ -210,6 +226,11 @@ namespace winrt::TerminalApp::implementation
             e.Handled(true);
             return;
         }
+    }
+
+    void TmuxControl::_NewTabButtonHandler(const IInspectable& /* sender*/, const Windows::UI::Xaml::RoutedEventArgs& /* eventArgs*/)
+    {
+        _NewWindow();
     }
 
     void TmuxControl::_RegisterPaneKeyHandler(int paneId, std::shared_ptr<Pane> pane)
@@ -453,7 +474,7 @@ namespace winrt::TerminalApp::implementation
 
         _cmdState = WAITING;
 
-        while (_cmdQueue.size() != 0)
+        while (_cmdQueue.size() > 0)
         {
             auto cmd = _cmdQueue.front().get();
             auto cmdStr = cmd->GetCommand();
@@ -912,6 +933,18 @@ namespace winrt::TerminalApp::implementation
         tmux._SyncWindowState(windows);
         tmux._AttachDone();
         return true;
+    }
+
+    void TmuxControl::_NewWindow()
+    {
+        auto cmd = std::make_unique<NewWindow>();
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+    }
+
+    std::wstring TmuxControl::NewWindow::GetCommand()
+    {
+        return std::wstring(L"new-window\n");
     }
 
     void TmuxControl::_ResizeWindow(int windowId, int width, int height)

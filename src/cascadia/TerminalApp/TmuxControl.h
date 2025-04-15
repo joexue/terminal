@@ -6,7 +6,7 @@
 #include <regex>
 #include <vector>
 #include <unordered_map>
-#include "../../terminal/input/terminalInput.hpp"
+#include "TerminalPage.g.h"
 
 #include "Pane.h"
 
@@ -165,7 +165,6 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
         };
 
         struct ResizePane : public Command
@@ -298,6 +297,7 @@ namespace winrt::TerminalApp::implementation
         void _KeyDownHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
         void _PaneKeyDownHandler(int paneId, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
         void _RegisterPaneKeyHandler(int paneId, std::shared_ptr<Pane> pane);
+        void _NewTabButtonHandler(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
 
         // Command methods
         void _AttachDone();
@@ -305,6 +305,7 @@ namespace winrt::TerminalApp::implementation
         void _DiscoverWindows(int sessionId);
         void _ListWindow(int windowId);
         void _ListPanes(int windowId, int history);
+        void _NewWindow();
         void _ResizeWindow(int windowId, int width, int height);
         void _SendKey(int paneId, const std::wstring keys);
         void _SetOption(const std::wstring& option);
@@ -315,6 +316,9 @@ namespace winrt::TerminalApp::implementation
         winrt::Microsoft::Terminal::Control::TermControl _core { nullptr };
         winrt::Windows::System::DispatcherQueue _dispatcherQueue{ nullptr };
         winrt::event_token _keyDownHandler;
+        winrt::event_token _newTabButtonHandler;
+
+        Microsoft::UI::Xaml::Controls::SplitButton _newTabButton{ nullptr };
 
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
@@ -323,8 +327,8 @@ namespace winrt::TerminalApp::implementation
         std::unordered_map<int, winrt::Microsoft::Terminal::Control::TermControl> _attachedControl;
         //::Microsoft::Console::VirtualTerminal::TerminalInput _termInput;
 
-        int _width;
-        int _height;
+        int _width{ 0 };
+        int _height{ 0 };
         int _sessionId;
 
     };
