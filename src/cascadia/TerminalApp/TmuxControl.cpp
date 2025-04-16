@@ -4,6 +4,8 @@
 #include <sstream>
 #include <iostream>
 
+#include <winrt/base.h>
+
 #include <winrt/Microsoft.Terminal.TerminalConnection.h>
 #include <winrt/impl/Microsoft.Terminal.TerminalConnection.1.h>
 
@@ -48,6 +50,7 @@ using namespace winrt::Microsoft::Terminal::Settings::Model;
 using namespace winrt::Microsoft::Terminal::TerminalConnection;
 using winrt::Microsoft::Terminal::Settings::Model::SplitDirection;
 using namespace winrt::Windows::UI;
+using namespace winrt::Windows::UI::Xaml;
 using namespace winrt::Windows::UI::Core;
 //using namespace Microsoft::Console::VirtualTerminal;
 
@@ -61,6 +64,7 @@ namespace winrt::TerminalApp::implementation
     const std::wregex TmuxControl::REG_CLIENT_DETACHED{ L"^%client-detached \\S+$" };
     const std::wregex TmuxControl::REG_CONFIG_ERROR{ L"^%config-error \\S+$" };
     const std::wregex TmuxControl::REG_CONTINUE{ L"^%continue %\\d+$" };
+    const std::wregex TmuxControl::REG_DETACH{ L"^\033$" };
     const std::wregex TmuxControl::REG_EXIT{ L"^%exit$" };
     const std::wregex TmuxControl::REG_EXTENDED_OUTPUT{ L"^%extended-output %\\d+ \\S+$" };
     const std::wregex TmuxControl::REG_LAYOUT_CHANGED{ L"^%layout-change @(\\d+) ([\\dabcdefABCDEF]{4}),(\\S+)( \\S+)*$" };
@@ -90,8 +94,6 @@ namespace winrt::TerminalApp::implementation
         _profile = pane->GetProfile();
 
         _core.SetTmuxControlHandlerProducer([this](auto print) {
-            _StartSession();
-
             print(L"Running the TMUX control mode, press 'q' to detach: ");
 
             return [this](const auto ch) mutable {
@@ -103,68 +105,60 @@ namespace winrt::TerminalApp::implementation
         return;
     }
 
-    void TmuxControl::_StartSession()
+    void TmuxControl::_AttachSession()
     {
-        _dispatcherQueue.TryEnqueue([this]() {
-            _state = State::ATTACHING;
+        _state = State::ATTACHING;
 
-            // Calculate our dimension
-            // Change the padding, otherwise the split panes will not match tmux panes size.
-            // 2 is the separator size, constant for now.
-            // Same reason, we make the scroll bar hidden.
-            auto fontSize = _core.CharacterDimensions();
-            auto x = _page.ActualWidth();
-            auto y = _page.ActualHeight();
-            _width = (int)(x / fontSize.Width);
-            _height = (int)(y / fontSize.Height);
+        // Calculate our dimension
+        // Change the padding, otherwise the split panes will not match tmux panes size.
+        auto fontSize = _core.CharacterDimensions();
+        auto x = _page.ActualWidth();
+        auto y = _page.ActualHeight();
+        _width = (int)(x / fontSize.Width);
+        _height = (int)(y / fontSize.Height);
 
-            _profile.Padding(std::format(L"0, 0, {}, {}", 0, 0));
-            _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
-            _profile.Icon(L"T");
+        _profile.Padding(L"0, 0, 0, 0");
+        _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
+        _profile.Icon(L"T");
 
-            _keyDownHandler = _core.KeyDown({ this, &TmuxControl::_KeyDownHandler });
+        _keyDownHandler = _core.KeyDown({ this, &TmuxControl::_KeyDownHandler });
 
-            auto tabRow = _page.TabRow();
-            auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
-            auto _newTabButton = tabRowImpl->NewTabButton();
-#if 0
-            _newTabButtonHandler = _newTabButton.Click([this](auto&&, auto&&) {
-                _NewWindow();
-            });
-#endif
-            _newTabButtonHandler = _newTabButton.Click({ this, &TmuxControl::_NewTabButtonHandler });
+        auto tabRow = _page.TabRow();
+        auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
+        _newTabButton = tabRowImpl->NewTabButton();
+        _newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
+        _newTabButtonHandler = _newTmuxTabButton.Click({ this, &TmuxControl::_NewTabButtonHandler });
 
-            _newTabButton.AllowDrop(false);
+        _newTabButton.Visibility(Visibility::Collapsed);
+        _newTmuxTabButton.Visibility(Visibility::Visible);
 
-            tmux_log_open();
-        });
+        tmux_log_open();
     }
 
-    void TmuxControl::_StopSession()
+    void TmuxControl::_DetachSession()
     {
-        _dispatcherQueue.TryEnqueue([this]() {
-            _state = INIT;
-            _cmdQueue.clear();
-            _dcsBuffer.clear();
-            _cmdState = READY;
+        _state = INIT;
+        _cmdQueue.clear();
+        _dcsBuffer.clear();
+        _cmdState = READY;
 
-            std::vector<winrt::TerminalApp::TabBase> tabs;
-            for (auto& t : _attachedTabs)
-            {
-                tabs.push_back(t.second);
-            }
-            _page._RemoveTabs(tabs);
-            _attachedPanes.clear();
-            _attachedTabs.clear();
+        std::vector<winrt::TerminalApp::TabBase> tabs;
+        for (auto& t : _attachedTabs)
+        {
+            tabs.push_back(t.second);
+        }
+        _page._RemoveTabs(tabs);
+        _attachedPanes.clear();
+        _attachedTabs.clear();
 
-            _core.KeyDown(_keyDownHandler);
-            //_newTabButton.Click(_newTabButtonHandler);
-            //_newTabButton.AllowDrop(true);
+        _core.KeyDown(_keyDownHandler);
+        _newTmuxTabButton.Click(_newTabButtonHandler);
 
-            _core.RawWriteString(L"\n");
+        _newTabButton.Visibility(Visibility::Visible);
+        _newTmuxTabButton.Visibility(Visibility::Collapsed);
+        _core.RawWriteString(L"\n");
 
-            tmux_log_close();
-        });
+        tmux_log_close();
     }
 
     void TmuxControl::_KeyDownHandler(const Windows::Foundation::IInspectable& /*sender*/, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e)
@@ -287,17 +281,6 @@ namespace winrt::TerminalApp::implementation
         c.SendOutput(out);
     }
 
-    void TmuxControl::_Response(std::wstring& result)
-    {
-        if (_cmdState == WAITING && _cmdQueue.size() > 0)
-        {
-            auto cmd = _cmdQueue.front().get();
-            cmd->HandleResult(result, *this);
-            _cmdQueue.pop_front();
-            _cmdState = READY;
-        }
-    }
-
     void TmuxControl::_WindowClose(int windowId)
     {
         auto search = _attachedTabs.find(windowId);
@@ -317,38 +300,34 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_EventHandle(Event& e)
     {
-
         switch(e.type)
         {
-            case OUTPUT:
-                {
-                    _Output(e.paneId, e.response);
-                    e.response.clear();
-                }
+            case ATTACH:
+                _AttachSession();
                 break;
+            case DETACH:
+                _DetachSession();
+                break;
+            case OUTPUT:
+                _Output(e.paneId, e.response);
+                break;
+            // Commands response
             case RESPONSE:
-                {
-                    _Response(e.response);
-                    e.response.clear();
-                }
+                _HandleCommand(e.response);
                 break;
             case SESSION_CHANGED:
-                {
-                    _sessionId = e.sessionId;
-                    _DiscoverWindows(_sessionId);
-                }
+                _DiscoverWindows(e.sessionId);
                 break;
             case WINDOW_CLOSE:
             case UNLINKED_WINDOW_CLOSE:
-                {
-                    _WindowClose(e.windowId);
-                }
+                _WindowClose(e.windowId);
                 break;
 
             default:
                 break;
         }
 
+        // We are done, give the command in queue a chance to run
         _ScheduleCommand();
     }
 
@@ -362,15 +341,22 @@ namespace winrt::TerminalApp::implementation
         {
             _event.type = BEGIN;
         }
-        else if (std::regex_match(line, REG_END))
+        else if (std::regex_match(line, REG_END) || std::regex_match(line, REG_ERROR))
         {
-            _event.type = RESPONSE;
-        }
-        else if (std::regex_match(line, REG_ERROR))
-        {
-            _event.type = RESPONSE;
+            if (_state == INIT)
+            {
+                _event.type = ATTACH;
+            }
+            else
+            {
+                _event.type = RESPONSE;
+            }
         }
         // tmux specific rules
+        else if (std::regex_match(line, REG_DETACH))
+        {
+            _event.type = DETACH;
+        }
         else if (std::regex_match(line, matches, REG_LAYOUT_CHANGED))
         {
             _event.type = LAYOUT_CHANGED;
@@ -408,7 +394,6 @@ namespace winrt::TerminalApp::implementation
             _event.type = UNLINKED_WINDOW_CLOSE;
             _event.windowId = std::stoi(matches.str(1));
         }
-        // do nothing, but return true, otherwise the terminal will enter the DcsIgnore mode.
         else
         {
             if (_event.type == BEGIN)
@@ -417,12 +402,16 @@ namespace winrt::TerminalApp::implementation
             }
             else
             {
+                // Other events that we don't care, do nothing
                 _event.type = NOTHING;
             }
         }
 
-        // Put in main thread
-        _EventHandle(_event);
+        if (_event.type != BEGIN && _event.type != NOTHING)
+        {
+            _EventHandle(_event);
+            _event.response.clear();
+        }
 
         return;
     }
@@ -430,64 +419,28 @@ namespace winrt::TerminalApp::implementation
     // from tmux to controller
     bool TmuxControl::_Advance(wchar_t ch)
     {
-        bool res;
+        std::wstring buffer;
 
-        if (ch == '\n')
+        switch(ch)
         {
-            std::wstring buffer(_dcsBuffer.begin(), _dcsBuffer.end());
-            _dispatcherQueue.TryEnqueue([this, buffer]() {
-                _Parse(buffer);
-            });
-            _dcsBuffer.clear();
-            res = true;
-        }
-        else if (ch == '\r')
-        {
-            res = true;
-        }
-        //ESC, quit the DSC mode
-        else if (ch == 27)
-        {
-            _StopSession();
-            res = true;
-        }
-        else
-        {
-            _dcsBuffer.push_back(ch);
-            res = true;
-        }
-        return res;
-    }
-
-    // from controller to tmux
-    void TmuxControl::_SendCommand(std::unique_ptr<TmuxControl::Command> cmd)
-    {
-        _cmdQueue.push_back(std::move(cmd));
-    }
-
-    void TmuxControl::_ScheduleCommand()
-    {
-        if (_cmdState != READY)
-        {
-            return;
+            case '\033':
+                _dcsBuffer.clear();
+                _dcsBuffer.push_back(ch);
+            case '\n':
+                buffer = std::wstring(_dcsBuffer.begin(), _dcsBuffer.end());
+                _dispatcherQueue.TryEnqueue([this, buffer]() {
+                        _Parse(buffer);
+                        });
+                _dcsBuffer.clear();
+                break;
+            case '\r':
+                break;
+            default:
+                _dcsBuffer.push_back(ch);
+                break;
         }
 
-        _cmdState = WAITING;
-
-        while (_cmdQueue.size() > 0)
-        {
-            auto cmd = _cmdQueue.front().get();
-            auto cmdStr = cmd->GetCommand();
-            if (cmdStr.empty())
-            {
-                _cmdQueue.pop_front();
-                continue;
-            }
-            tmux_log(L"   CMD: " + cmdStr);
-            _core.RawWriteString(cmdStr);
-            return;
-        }
-        _cmdState = READY;
+        return true;
     }
 
     bool TmuxControl::_SyncPaneState(std::vector<TmuxPane> panes, int history)
@@ -817,7 +770,7 @@ namespace winrt::TerminalApp::implementation
             tmux._ResizeWindow(windowId, tmux._width, tmux._height);
         }
 
-        tmux._ListWindow(-1);
+        tmux._ListWindow(this->sessionId, -1);
         return true;
     }
 
@@ -877,11 +830,11 @@ namespace winrt::TerminalApp::implementation
         return true;
     }
 
-    void TmuxControl::_ListWindow(int windowId)
+    void TmuxControl::_ListWindow(int sessionId, int windowId)
     {
         auto cmd = std::make_unique<ListWindow>();
         cmd->windowId = windowId;
-        cmd->sessionId = _sessionId;
+        cmd->sessionId = sessionId;
         _SendCommand(std::move(cmd));
         _ScheduleCommand();
     }
@@ -995,5 +948,47 @@ namespace winrt::TerminalApp::implementation
     std::wstring TmuxControl::SetOption::GetCommand()
     {
         return std::wstring(std::format(L"set-option {}\n", this->option));
+    }
+
+    // from controller to tmux
+    void TmuxControl::_HandleCommand(std::wstring& result)
+    {
+        if (_cmdState == WAITING && _cmdQueue.size() > 0)
+        {
+            auto cmd = _cmdQueue.front().get();
+            cmd->HandleResult(result, *this);
+            _cmdQueue.pop_front();
+            _cmdState = READY;
+        }
+    }
+
+    void TmuxControl::_SendCommand(std::unique_ptr<TmuxControl::Command> cmd)
+    {
+        _cmdQueue.push_back(std::move(cmd));
+    }
+
+    void TmuxControl::_ScheduleCommand()
+    {
+        if (_cmdState != READY)
+        {
+            return;
+        }
+
+        _cmdState = WAITING;
+
+        while (_cmdQueue.size() > 0)
+        {
+            auto cmd = _cmdQueue.front().get();
+            auto cmdStr = cmd->GetCommand();
+            if (cmdStr.empty())
+            {
+                _cmdQueue.pop_front();
+                continue;
+            }
+            tmux_log(L"   CMD: " + cmdStr);
+            _core.RawWriteString(cmdStr);
+            return;
+        }
+        _cmdState = READY;
     }
 }

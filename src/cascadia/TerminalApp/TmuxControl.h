@@ -28,6 +28,7 @@ namespace winrt::TerminalApp::implementation
         static const std::wregex REG_CLIENT_DETACHED;
         static const std::wregex REG_CONFIG_ERROR;
         static const std::wregex REG_CONTINUE;
+        static const std::wregex REG_DETACH;
         static const std::wregex REG_EXIT;
         static const std::wregex REG_EXTENDED_OUTPUT;
         static const std::wregex REG_LAYOUT_CHANGED;
@@ -68,6 +69,9 @@ namespace winrt::TerminalApp::implementation
             BEGIN,
             END,
             ERR,
+
+            ATTACH,
+            DETACH,
             CLIENT_SESSION_CHANGED,
             CLIENT_DETACHED,
             CONFIG_ERROR,
@@ -274,41 +278,43 @@ namespace winrt::TerminalApp::implementation
         };
 
         // Private methods
-        void _StartSession();
-        void _StopSession();
+        void _AttachSession();
+        void _DetachSession();
 
-        std::shared_ptr<Pane> _NewPane(int paneId);
+        void _KeyDownHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
+        void _PaneKeyDownHandler(int paneId, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
+        void _NewTabButtonHandler(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
+
+        void _RegisterPaneKeyHandler(int paneId, std::shared_ptr<Pane> pane);
 
 
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
-        void _Output(int paneId, const std::wstring& result);
-        void _Response(std::wstring& result);
-        void _EventHandle(Event& e);
+        std::shared_ptr<Pane> _NewPane(int paneId);
         void _WindowClose(int windowId);
+        void _Output(int paneId, const std::wstring& result);
 
         bool _SyncWindowState(std::vector<TmuxWindow> windows);
         bool _SyncPaneState(std::vector<TmuxPane> panes, int history);
         std::vector<Layout> _ParseLayout(std::wstring& layout);
+
+        void _EventHandle(Event& e);
         void _Parse(const std::wstring& buffer);
         bool _Advance(wchar_t ch);
-
-        void _SendCommand(std::unique_ptr<Command> cmd);
-        void _ScheduleCommand();
-        void _KeyDownHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
-        void _PaneKeyDownHandler(int paneId, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
-        void _RegisterPaneKeyHandler(int paneId, std::shared_ptr<Pane> pane);
-        void _NewTabButtonHandler(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
 
         // Command methods
         void _AttachDone();
         void _CapturePane(int paneId, int cursorX, int cursorY, int history);
         void _DiscoverWindows(int sessionId);
-        void _ListWindow(int windowId);
+        void _ListWindow(int sessionId, int windowId);
         void _ListPanes(int windowId, int history);
         void _NewWindow();
         void _ResizeWindow(int windowId, int width, int height);
         void _SendKey(int paneId, const std::wstring keys);
         void _SetOption(const std::wstring& option);
+
+        void _HandleCommand(std::wstring& result);
+        void _SendCommand(std::unique_ptr<Command> cmd);
+        void _ScheduleCommand();
 
         // Private variables
         TerminalPage& _page;
@@ -319,17 +325,15 @@ namespace winrt::TerminalApp::implementation
         winrt::event_token _newTabButtonHandler;
 
         Microsoft::UI::Xaml::Controls::SplitButton _newTabButton{ nullptr };
+        Windows::UI::Xaml::Controls::Button _newTmuxTabButton{ nullptr };
 
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
         std::unordered_map<int, std::shared_ptr<Pane>> _attachedPanes;
         std::unordered_map<int, TerminalApp::TerminalTab> _attachedTabs;
         std::unordered_map<int, winrt::Microsoft::Terminal::Control::TermControl> _attachedControl;
-        //::Microsoft::Console::VirtualTerminal::TerminalInput _termInput;
 
         int _width{ 0 };
         int _height{ 0 };
-        int _sessionId;
-
     };
 }
