@@ -3,11 +3,7 @@
 
 #include <sstream>
 #include <iostream>
-
 #include <winrt/base.h>
-
-#include <winrt/Microsoft.Terminal.TerminalConnection.h>
-#include <winrt/impl/Microsoft.Terminal.TerminalConnection.1.h>
 
 #include "pch.h"
 #include "ScratchpadContent.h"
@@ -45,13 +41,15 @@ static void tmux_log_close()
 }
 
 using namespace winrt::Microsoft::Terminal;
-using winrt::Microsoft::Terminal::Control::TermControl;
+using namespace winrt::Microsoft::Terminal::Control;
 using namespace winrt::Microsoft::Terminal::Settings::Model;
 using namespace winrt::Microsoft::Terminal::TerminalConnection;
-using winrt::Microsoft::Terminal::Settings::Model::SplitDirection;
+using namespace winrt::Windows::System;
 using namespace winrt::Windows::UI;
 using namespace winrt::Windows::UI::Xaml;
 using namespace winrt::Windows::UI::Core;
+
+using winrt::Microsoft::Terminal::Settings::Model::SplitDirection;
 //using namespace Microsoft::Console::VirtualTerminal;
 
 namespace winrt::TerminalApp::implementation
@@ -101,7 +99,7 @@ namespace winrt::TerminalApp::implementation
             };
         });
 
-        _dispatcherQueue = winrt::Windows::System::DispatcherQueue::GetForCurrentThread();
+        _dispatcherQueue = DispatcherQueue::GetForCurrentThread();
         return;
     }
 
@@ -110,19 +108,21 @@ namespace winrt::TerminalApp::implementation
         _state = State::ATTACHING;
 
         // Calculate our dimension
-        // Change the padding, otherwise the split panes will not match tmux panes size.
         auto fontSize = _core.CharacterDimensions();
         auto x = _page.ActualWidth();
         auto y = _page.ActualHeight();
         _width = (int)(x / fontSize.Width);
         _height = (int)(y / fontSize.Height);
 
+        // Change the padding, otherwise the split panes will not match tmux panes size.
         _profile.Padding(L"0, 0, 0, 0");
         _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
         _profile.Icon(L"T");
 
-        _keyDownHandler = _core.KeyDown({ this, &TmuxControl::_KeyDownHandler });
+        // Intercept the control terminal's input, ignore all user input, except 'q' as detach command.
+        _detachKeyRevoker = _core.KeyDown({ this, &TmuxControl::_DetachKeyHandler });
 
+        // Hide the system's splitbutton, show tmux control owns
         auto tabRow = _page.TabRow();
         auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
         _newTabButton = tabRowImpl->NewTabButton();
@@ -151,7 +151,7 @@ namespace winrt::TerminalApp::implementation
         _attachedPanes.clear();
         _attachedTabs.clear();
 
-        _core.KeyDown(_keyDownHandler);
+        _core.KeyDown(_detachKeyRevoker);
         _newTmuxTabButton.Click(_newTabButtonHandler);
 
         _newTabButton.Visibility(Visibility::Visible);
@@ -161,9 +161,9 @@ namespace winrt::TerminalApp::implementation
         tmux_log_close();
     }
 
-    void TmuxControl::_KeyDownHandler(const Windows::Foundation::IInspectable& /*sender*/, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e)
+    void TmuxControl::_DetachKeyHandler(const Windows::Foundation::IInspectable& /*sender*/, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e)
     {
-        if (e.Key() == winrt::Windows::System::VirtualKey::Q)
+        if (e.Key() == VirtualKey::Q)
         {
             tmux_log(L"   CMD: detach\n");
             _core.RawWriteString(L"detach\n");
@@ -171,78 +171,60 @@ namespace winrt::TerminalApp::implementation
         e.Handled(true);
     }
 
-    // Poor version keymap
-    void TmuxControl::_PaneKeyDownHandler(int paneId, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e)
-    {
-        auto vk = (UINT)e.Key();
-        std::vector<BYTE> keys(256, 0);
-
-        if (!GetKeyboardState(&keys[0]))
-        {
-            return;
-        }
-
-        int sc = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
-
-        WCHAR buffer[4];
-        auto rc = ToUnicode(vk, sc, &keys[0], buffer, 4, 0);
-
-        if (rc > 0)
-        {
-            std::wstring keys(buffer, rc);
-            _SendKey(paneId, keys);
-            e.Handled(true);
-            return;
-        }
-
-        std::wstring out = L"";
-
-        if (e.Key() == winrt::Windows::System::VirtualKey::Up)
-        {
-            out = L"\033[A";
-        }
-        else if (e.Key() == winrt::Windows::System::VirtualKey::Down)
-        {
-            out = L"\033[B";
-        }
-        else if (e.Key() == winrt::Windows::System::VirtualKey::Right)
-        {
-            out = L"\033[C";
-        }
-        else if (e.Key() == winrt::Windows::System::VirtualKey::Left)
-        {
-            out = L"\033[D";
-        }
-
-        if (out.size() > 0)
-        {
-            _SendKey(paneId, out);
-            e.Handled(true);
-            return;
-        }
-    }
-
     void TmuxControl::_NewTabButtonHandler(const IInspectable& /* sender*/, const Windows::UI::Xaml::RoutedEventArgs& /* eventArgs*/)
     {
         _NewWindow();
     }
 
-    void TmuxControl::_RegisterPaneKeyHandler(int paneId, std::shared_ptr<Pane> pane)
+    void TmuxControl::_CharHandler(int paneId , const Control::CharSentEventArgs& args)
     {
-        pane->GetRootElement().PreviewKeyDown([this, pane, paneId](auto& /*s*/, auto& e) {
-            auto c = pane->GetTerminalControl();
-            if (c == nullptr)
-            {
-                return;
-            }
-            _PaneKeyDownHandler(paneId, e);
-        });
+        auto ch = args.Character();
+        std::wstring keys(1, static_cast<wchar_t>(ch));
+        _SendKey(paneId, keys);
+    }
+
+    // Poor version keymap
+    void TmuxControl::_KeyHandler(int paneId, const Control::KeySentEventArgs& args)
+    {
+        auto ch = static_cast<VirtualKey>(args.VKey());
+        auto keyDown = args.KeyDown();
+        std::wstring out = L"";
+
+        if (!keyDown)
+        {
+            return;
+        }
+
+        if (ch == VirtualKey::Up)
+        {
+            out = L"\033[A";
+        }
+        else if (ch == VirtualKey::Down)
+        {
+            out = L"\033[B";
+        }
+        else if (ch == VirtualKey::Right)
+        {
+            out = L"\033[C";
+        }
+        else if (ch == VirtualKey::Left)
+        {
+            out = L"\033[D";
+        }
+        else if (ch == VirtualKey::Tab)
+        {
+            out = L"\t";
+        }
+
+        if (out.size() > 0)
+        {
+            _SendKey(paneId, out);
+        }
     }
 
     std::shared_ptr<Pane> TmuxControl::_NewPane(int paneId)
     {
         auto connection = TerminalConnection::DumyConnection{};
-        //TerminalSettingsCreateResult controlSettings{ nullptr };
 
         auto controlSettings = TerminalSettings::CreateWithProfile(_page._settings, _profile, *_page._bindings);
         const auto control = _page._CreateNewControlAndContent(controlSettings, connection);
@@ -250,13 +232,12 @@ namespace winrt::TerminalApp::implementation
         auto paneContent{ winrt::make<TerminalPaneContent> (_profile, _page._terminalSettingsCache, control) };
         auto resultPane = std::make_shared<Pane>(paneContent);
 
-        _RegisterPaneKeyHandler(paneId, resultPane);
-        #if 0
-        auto c = resultPane->GetTerminalControl();
-        c.KeyDown([this, paneId](auto& /*s*/, auto& e) {
-            _PaneKeyDownHandler(paneId, e);
+        control.CharSent([this, paneId](auto& /*i*/, auto& e) {
+            return _CharHandler(paneId, e);
         });
-        #endif
+        control.KeySent([this, paneId](auto& /*i*/, auto& e) {
+            return _KeyHandler(paneId, e);
+        });
 
         return resultPane;
     }
@@ -419,25 +400,29 @@ namespace winrt::TerminalApp::implementation
     // from tmux to controller
     bool TmuxControl::_Advance(wchar_t ch)
     {
-        std::wstring buffer;
+        std::wstring buffer = L"";
 
         switch(ch)
         {
             case '\033':
-                _dcsBuffer.clear();
-                _dcsBuffer.push_back(ch);
+                buffer.push_back(ch);
+                break;
             case '\n':
                 buffer = std::wstring(_dcsBuffer.begin(), _dcsBuffer.end());
-                _dispatcherQueue.TryEnqueue([this, buffer]() {
-                        _Parse(buffer);
-                        });
-                _dcsBuffer.clear();
                 break;
             case '\r':
                 break;
             default:
                 _dcsBuffer.push_back(ch);
                 break;
+        }
+
+        if (buffer.size() > 0)
+        {
+            _dispatcherQueue.TryEnqueue([this, buffer]() {
+                _Parse(buffer);
+            });
+            _dcsBuffer.clear();
         }
 
         return true;
@@ -526,7 +511,6 @@ namespace winrt::TerminalApp::implementation
                         scaleRoot -= scalePane;
                     }
                     targetPane = targetPane->AttachPane(pane, direction, splitSize);
-                    _RegisterPaneKeyHandler(targetPandId, targetPane);
                     _attachedPanes.insert_or_assign(targetPandId, targetPane);
                 }
             }

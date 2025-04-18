@@ -281,12 +281,11 @@ namespace winrt::TerminalApp::implementation
         void _AttachSession();
         void _DetachSession();
 
-        void _KeyDownHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
-        void _PaneKeyDownHandler(int paneId, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
+        void _DetachKeyHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
         void _NewTabButtonHandler(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
 
-        void _RegisterPaneKeyHandler(int paneId, std::shared_ptr<Pane> pane);
-
+        void _CharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
+        void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
 
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
         std::shared_ptr<Pane> _NewPane(int paneId);
@@ -321,7 +320,7 @@ namespace winrt::TerminalApp::implementation
         winrt::Microsoft::Terminal::Settings::Model::Profile _profile;
         winrt::Microsoft::Terminal::Control::TermControl _core { nullptr };
         winrt::Windows::System::DispatcherQueue _dispatcherQueue{ nullptr };
-        winrt::event_token _keyDownHandler;
+        winrt::event_token _detachKeyRevoker;
         winrt::event_token _newTabButtonHandler;
 
         Microsoft::UI::Xaml::Controls::SplitButton _newTabButton{ nullptr };
