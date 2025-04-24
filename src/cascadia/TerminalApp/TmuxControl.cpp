@@ -117,7 +117,7 @@ namespace winrt::TerminalApp::implementation
         // Change the padding, otherwise the split panes will not match tmux panes size.
         _profile.Padding(L"0, 0, 0, 0");
         _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
-        _profile.Icon(L"T");
+        _profile.Icon(L"\uED35");
 
         // Intercept the control terminal's input, ignore all user input, except 'q' as detach command.
         _detachKeyRevoker = _core.KeyDown({ this, &TmuxControl::_DetachKeyHandler });
@@ -128,6 +128,9 @@ namespace winrt::TerminalApp::implementation
         _newTabButton = tabRowImpl->NewTabButton();
         _newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
         _newTabButtonHandler = _newTmuxTabButton.Click({ this, &TmuxControl::_NewTabButtonHandler });
+
+        _newTmuxTabButton.Background(_newTabButton.Background());
+        _newTmuxTabButton.Foreground(_newTabButton.Foreground());
 
         _newTabButton.Visibility(Visibility::Collapsed);
         _newTmuxTabButton.Visibility(Visibility::Visible);
@@ -172,7 +175,7 @@ namespace winrt::TerminalApp::implementation
         e.Handled(true);
     }
 
-    void TmuxControl::_NewTabButtonHandler(const IInspectable& /* sender*/, const Windows::UI::Xaml::RoutedEventArgs& /* eventArgs*/)
+    void TmuxControl::_NewTabButtonHandler(const Microsoft::UI::Xaml::Controls::SplitButton& /*SplitButton*/, const Microsoft::UI::Xaml::Controls::SplitButtonClickEventArgs& /*args*/)
     {
         _NewWindow();
     }

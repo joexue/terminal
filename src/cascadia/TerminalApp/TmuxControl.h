@@ -290,7 +290,7 @@ namespace winrt::TerminalApp::implementation
         void _DetachSession();
 
         void _DetachKeyHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
-        void _NewTabButtonHandler(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
+        void _NewTabButtonHandler(const Microsoft::UI::Xaml::Controls::SplitButton& SplitButton, const Microsoft::UI::Xaml::Controls::SplitButtonClickEventArgs& args);
 
         void _CharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
         void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
@@ -335,7 +335,7 @@ namespace winrt::TerminalApp::implementation
         winrt::event_token _newTabButtonHandler;
 
         Microsoft::UI::Xaml::Controls::SplitButton _newTabButton{ nullptr };
-        Windows::UI::Xaml::Controls::Button _newTmuxTabButton{ nullptr };
+        Microsoft::UI::Xaml::Controls::SplitButton _newTmuxTabButton{ nullptr };
 
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;

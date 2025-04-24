@@ -133,7 +133,7 @@
                         </ResourceDictionary>
                     </mux:SplitButton.Resources>
                 </mux:SplitButton>
-                <Button x:Name="NewTmuxTabButton"
+                <mux:SplitButton x:Name="NewTmuxTabButton"
                                  x:Uid="NewTmuxTabSplitButton"
                                  Height="24"
                                  Margin="0,4"
@@ -159,7 +159,30 @@
                             </TextBlock>
                         </ToolTip>
                     </ToolTipService.ToolTip>
-                </Button>
+                    <mux:SplitButton.Flyout>
+                        <MenuFlyout x:Name="SplitMenu" Placement="BottomEdgeAlignedLeft">
+                            <MenuFlyoutItem Text="Horizontal Split" KeyboardAcceleratorTextOverride="Ctrl+H">
+                                <MenuFlyoutItem.KeyboardAccelerators>
+                                    <KeyboardAccelerator IsEnabled="True" Key="H" Modifiers="Control"/>
+                                </MenuFlyoutItem.KeyboardAccelerators>
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE90E;">
+                                    </FontIcon>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Vertical Split" KeyboardAcceleratorTextOverride="Ctrl+V">
+                                <MenuFlyoutItem.KeyboardAccelerators>
+                                    <KeyboardAccelerator IsEnabled="True" Key="V" Modifiers="Control"/>
+                                </MenuFlyoutItem.KeyboardAccelerators>
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE90D;">
+                                    </FontIcon>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyout>
+                    </mux:SplitButton.Flyout>
+
+                </mux:SplitButton>
             </Grid>
         </mux:TabView.TabStripFooter>
 
