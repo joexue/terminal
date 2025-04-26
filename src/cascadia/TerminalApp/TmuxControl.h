@@ -294,8 +294,9 @@ namespace winrt::TerminalApp::implementation
 
         void _CharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
         void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
-        void _TermReadyHandler(int paneId, const std::wstring& result);
+        void _TermReadyHandler(int paneId, const std::wstring& text);
 
+        void _SendOutput(int paneId, const std::wstring& text);
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
         std::shared_ptr<Pane> _NewPane(int paneId);
         void _WindowClose(int windowId);
