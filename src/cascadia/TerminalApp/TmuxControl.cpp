@@ -115,6 +115,7 @@ namespace winrt::TerminalApp::implementation
         _height = (int)(y / fontSize.Height);
 
         // Change the padding, otherwise the split panes will not match tmux panes size.
+        _padding = _profile.Padding();
         _profile.Padding(L"0, 0, 0, 0");
         _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
         _profile.Icon(L"\uF714");

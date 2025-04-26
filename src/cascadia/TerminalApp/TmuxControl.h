@@ -347,5 +347,6 @@ namespace winrt::TerminalApp::implementation
 
         int _width{ 0 };
         int _height{ 0 };
+        std::wstring _padding;
     };
 }

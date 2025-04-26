@@ -166,7 +166,7 @@
                                     <KeyboardAccelerator IsEnabled="True" Key="H" Modifiers="Control"/>
                                 </MenuFlyoutItem.KeyboardAccelerators>
                                 <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE90E;">
+                                    <FontIcon Glyph="&#xE76F;">
                                     </FontIcon>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
@@ -175,7 +175,7 @@
                                     <KeyboardAccelerator IsEnabled="True" Key="V" Modifiers="Control"/>
                                 </MenuFlyoutItem.KeyboardAccelerators>
                                 <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE90D;">
+                                    <FontIcon Glyph="&#xE784;">
                                     </FontIcon>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
