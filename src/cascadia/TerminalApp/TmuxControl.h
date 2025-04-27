@@ -296,6 +296,7 @@ namespace winrt::TerminalApp::implementation
         void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
         void _TermReadyHandler(int paneId, const std::wstring& text);
 
+        float _ComputeSplitSize(int newSize, int originSize, winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
         void _SendOutput(int paneId, const std::wstring& text);
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
         std::shared_ptr<Pane> _NewPane(int paneId);
@@ -347,6 +348,11 @@ namespace winrt::TerminalApp::implementation
 
         int _width{ 0 };
         int _height{ 0 };
+
+        float _fontWidth{ 0 };
+        float _fontHeight{ 0 };
+
+        ::winrt::Windows::UI::Xaml::Thickness _thickness;
         std::wstring _padding;
     };
 }

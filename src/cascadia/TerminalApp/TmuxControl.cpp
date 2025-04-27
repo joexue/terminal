@@ -50,7 +50,8 @@ using namespace winrt::Windows::UI::Xaml;
 using namespace winrt::Windows::UI::Core;
 
 using winrt::Microsoft::Terminal::Settings::Model::SplitDirection;
-//using namespace Microsoft::Console::VirtualTerminal;
+
+static const int PaneBorderSize = 2;
 
 namespace winrt::TerminalApp::implementation
 {
@@ -111,12 +112,21 @@ namespace winrt::TerminalApp::implementation
         auto fontSize = _core.CharacterDimensions();
         auto x = _page.ActualWidth();
         auto y = _page.ActualHeight();
-        _width = (int)(x / fontSize.Width);
-        _height = (int)(y / fontSize.Height);
+
+        _fontWidth = fontSize.Width;
+        _fontHeight = fontSize.Height;
 
         // Change the padding, otherwise the split panes will not match tmux panes size.
-        _padding = _profile.Padding();
-        _profile.Padding(L"0, 0, 0, 0");
+        //_padding = _profile.Padding();
+        _thickness.Left = (_fontWidth - 2 * PaneBorderSize) / 2;
+        _thickness.Right = (_fontWidth - 2 * PaneBorderSize) / 2;
+        _thickness.Top = (_fontHeight - 2 * PaneBorderSize) / 2;
+        _thickness.Bottom = (_fontHeight - 2 * PaneBorderSize) / 2;
+
+        _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
+        _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
+
+        _profile.Padding(XamlThicknessToOptimalString(_thickness));
         _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
         _profile.Icon(L"\uF714");
 
@@ -247,6 +257,9 @@ namespace winrt::TerminalApp::implementation
         if (c.ViewHeight() != 0) {
             std::wstring out = L"";
             _DecodeOutput(text, out);
+#if 1
+            out += std::format(L" {}x{}", c.ViewWidth(), c.ViewHeight());
+#endif
             c.SendOutput(out);
         }
         else
@@ -256,6 +269,38 @@ namespace winrt::TerminalApp::implementation
                 return _TermReadyHandler(paneId, res);
             });
         }
+    }
+
+    float TmuxControl::_ComputeSplitSize(int newSize, int originSize, SplitDirection direction)
+    {
+        float fontSize = _fontWidth;
+        double amend1, amend2;
+        switch(direction)
+        {
+            case SplitDirection::Left:
+                amend1 = _thickness.Left + _thickness.Right + PaneBorderSize;
+                amend2 = _thickness.Left + _thickness.Right;
+                break;
+            case SplitDirection::Right:
+                amend1 = _thickness.Left + _thickness.Right + PaneBorderSize;
+                amend2 = _thickness.Left + _thickness.Right;
+                break;
+            case SplitDirection::Up:
+                fontSize = _fontHeight;
+                amend1 = _thickness.Top + _thickness.Bottom + PaneBorderSize;
+                amend2 = _thickness.Top + _thickness.Bottom;
+                break;
+            case SplitDirection::Down:
+                fontSize = _fontHeight;
+                amend1 = _thickness.Top + _thickness.Bottom + PaneBorderSize;
+                amend2 = _thickness.Top + _thickness.Bottom;
+                break;
+            default:
+                break;
+        }
+
+        auto f = (newSize  * fontSize + amend1) / (originSize  * fontSize + amend2);
+        return 1 - (float)f;
     }
 
     std::shared_ptr<Pane> TmuxControl::_NewPane(int paneId)
@@ -500,7 +545,7 @@ namespace winrt::TerminalApp::implementation
             std::shared_ptr<Pane> rootPane{ nullptr };
             for (auto& l : w.layout)
             {
-                int scaleRoot;
+                int rootSize;
                 auto& panes = l.panes;
                 auto& p = panes.at(0);
                 switch (l.type)
@@ -513,11 +558,11 @@ namespace winrt::TerminalApp::implementation
                         }
                     case SPLIT_HORIZONTAL:
                         direction = SplitDirection::Left;
-                        scaleRoot = p.width;
+                        rootSize = p.width;
                         break;
                     case SPLIT_VERTICAL:
                         direction = SplitDirection::Up;
-                        scaleRoot = p.height;
+                        rootSize = p.height;
                         break;
                 }
 
@@ -548,15 +593,17 @@ namespace winrt::TerminalApp::implementation
                     float splitSize;
                     if (direction == SplitDirection::Left)
                     {
-                        auto scalePane = panes.at(i).width;
-                        splitSize = 1.0f - (float)scalePane / (float)scaleRoot;
-                        scaleRoot -= scalePane;
+                        auto paneSize = panes.at(i).width;
+                        splitSize = _ComputeSplitSize(paneSize, rootSize, direction);
+                        //splitSize = 1.0f - (float)paneSize / (float)rootSize;
+                        rootSize -= (paneSize + 1);
                     }
                     else
                     {
-                        auto scalePane = panes.at(i).height;
-                        splitSize = 1.0f - (float)scalePane / (float)scaleRoot;
-                        scaleRoot -= scalePane;
+                        auto paneSize = panes.at(i).height;
+                        splitSize = _ComputeSplitSize(paneSize, rootSize, direction);
+                        //splitSize = 1.0f - (float)paneSize / (float)rootSize;
+                        rootSize -= (paneSize + 1);
                     }
                     targetPane = targetPane->AttachPane(pane, direction, splitSize);
                     _attachedPanes.insert_or_assign(targetPandId, targetPane);
