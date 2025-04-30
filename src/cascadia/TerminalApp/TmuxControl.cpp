@@ -89,9 +89,10 @@ namespace winrt::TerminalApp::implementation
     TmuxControl::TmuxControl(TerminalPage& page, std::shared_ptr<Pane> pane) :
         _page(page)
     {
-        _core = pane->GetTerminalControl();
-        _profile = pane->GetProfile();
+        const auto settings{ CascadiaSettings::LoadDefaults() };
+        _profile = settings.DuplicateProfile(pane->GetProfile());
 
+        _core = pane->GetTerminalControl();
         _core.SetTmuxControlHandlerProducer([this](auto print) {
             print(L"Running the TMUX control mode, press 'q' to detach: ");
 
@@ -116,12 +117,14 @@ namespace winrt::TerminalApp::implementation
         _fontWidth = fontSize.Width;
         _fontHeight = fontSize.Height;
 
-        // Change the padding, otherwise the split panes will not match tmux panes size.
-        //_padding = _profile.Padding();
-        _thickness.Left = (_fontWidth - 2 * PaneBorderSize) / 2;
-        _thickness.Right = (_fontWidth - 2 * PaneBorderSize) / 2;
-        _thickness.Top = (_fontHeight - 2 * PaneBorderSize) / 2;
-        _thickness.Bottom = (_fontHeight - 2 * PaneBorderSize) / 2;
+        // Tmux use one character to draw separator line, so we have to make the padding
+        // plus two borders equas one charcter's width or height
+        // Same reason, we have to disable the scrollbar, otherwise the local panes size
+        // will not match Tmmux's.
+        _thickness.Left = int((_fontWidth - 2 * PaneBorderSize) / 2);
+        _thickness.Right = int((_fontWidth - 2 * PaneBorderSize) / 2);
+        _thickness.Top = int((_fontHeight - 2 * PaneBorderSize) / 2);
+        _thickness.Bottom = int((_fontHeight - 2 * PaneBorderSize) / 2);
 
         _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
         _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
@@ -159,10 +162,8 @@ namespace winrt::TerminalApp::implementation
         std::vector<winrt::TerminalApp::TabBase> tabs;
         for (auto& t : _attachedTabs)
         {
-            //tabs.push_back(t.second);
             _page._RemoveTab(t.second);
         }
-        //_page._RemoveTabs(tabs);
         _attachedPanes.clear();
         _attachedTabs.clear();
 
@@ -299,7 +300,7 @@ namespace winrt::TerminalApp::implementation
                 break;
         }
 
-        auto f = (newSize  * fontSize + amend1) / (originSize  * fontSize + amend2);
+        auto f = round(newSize  * fontSize + amend1) / round(originSize  * fontSize + amend2);
         return 1 - (float)f;
     }
 
@@ -792,15 +793,6 @@ namespace winrt::TerminalApp::implementation
         result.pop_back();
         // Put the cursor to right posit
         result += std::format(L"\033[{};{}H", this->cursorY + 1, this->cursorX + 1);
-#if 0
-        auto s = tmux._attachedPanes.find(this->paneId);
-        if (s == tmux._attachedPanes.end()) {
-            return false;
-        }
-
-        auto c = s->second->GetTerminalControl();
-        result += std::format(L" {}x{}", c.ViewWidth(), c.ViewHeight());
-#endif
         tmux._SendOutput(this->paneId, result);
         return true;
     }
