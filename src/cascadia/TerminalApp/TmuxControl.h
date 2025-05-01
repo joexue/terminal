@@ -143,7 +143,9 @@ namespace winrt::TerminalApp::implementation
             std::wstring GetCommand() override;
             bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
 
+            int sessionId;
             int windowId;
+            bool addPane;
         };
 
         struct DiscoverWindows : public Command {
@@ -296,6 +298,7 @@ namespace winrt::TerminalApp::implementation
         void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
         void _TermReadyHandler(int paneId, const std::wstring& text);
 
+        void _UpdateAttachedPane(int windowId);
         float _ComputeSplitSize(int newSize, int originSize, winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
         void _SendOutput(int paneId, const std::wstring& text);
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
@@ -314,12 +317,12 @@ namespace winrt::TerminalApp::implementation
         // Command methods
         void _AttachDone();
         void _CapturePane(int paneId, int cursorX, int cursorY, int history);
-        void _DiscoverPanes(int sessionId);
+        void _DiscoverPanes(int sessionId, int windowId, bool addPane);
         void _DiscoverWindows(int sessionId);
         void _ListWindow(int sessionId, int windowId);
         void _ListPanes(int windowId, int history);
         void _NewWindow();
-        void _NewWindowAndPane(int windowId, int paneId);
+        void _NewWindowAndPane(int windowId, const std::wstring& windowName, int paneId);
         void _ResizeWindow(int windowId, int width, int height);
         void _SendKey(int paneId, const std::wstring keys);
         void _SetOption(const std::wstring& option);
@@ -341,8 +344,8 @@ namespace winrt::TerminalApp::implementation
 
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
-        std::unordered_map<int, std::shared_ptr<Pane>> _attachedPanes;
-        std::unordered_map<int, TerminalApp::TerminalTab> _attachedTabs;
+        std::unordered_map<int, std::pair<std::shared_ptr<Pane>, winrt::Microsoft::Terminal::Control::TermControl>> _attachedPanes;
+        std::unordered_map<int, std::pair<TerminalApp::TerminalTab, std::shared_ptr<Pane>>> _attachedTabs;
         std::unordered_map<int, winrt::Microsoft::Terminal::Control::TermControl> _attachedControl;
         std::unordered_map<int, std::wstring> _outputBacklog;
 
@@ -354,5 +357,6 @@ namespace winrt::TerminalApp::implementation
 
         ::winrt::Windows::UI::Xaml::Thickness _thickness;
         std::wstring _padding;
+        int _sessionId;
     };
 }

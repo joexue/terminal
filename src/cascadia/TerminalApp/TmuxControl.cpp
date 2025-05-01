@@ -162,7 +162,7 @@ namespace winrt::TerminalApp::implementation
         std::vector<winrt::TerminalApp::TabBase> tabs;
         for (auto& t : _attachedTabs)
         {
-            _page._RemoveTab(t.second);
+            _page._RemoveTab(t.second.first);
         }
         _attachedPanes.clear();
         _attachedTabs.clear();
@@ -252,13 +252,13 @@ namespace winrt::TerminalApp::implementation
             return;
         }
 
-        auto p = search->second;
+        auto p = search->second.first;
         auto c = p->GetTerminalControl();
 
         if (c.ViewHeight() != 0) {
             std::wstring out = L"";
             _DecodeOutput(text, out);
-#if 1
+#if 0
             out += std::format(L" {}x{}", c.ViewWidth(), c.ViewHeight());
 #endif
             c.SendOutput(out);
@@ -270,6 +270,27 @@ namespace winrt::TerminalApp::implementation
                 return _TermReadyHandler(paneId, res);
             });
         }
+    }
+
+    void TmuxControl::_UpdateAttachedPane(int windowId)
+    {
+        auto search = _attachedTabs.find(windowId);
+        if (search == _attachedTabs.end())
+        {
+            return;
+        }
+
+        auto rootPane = search->second.second;
+        rootPane->WalkTree([&](const auto& pt) {
+            auto c = pt->GetTerminalControl();
+            for (auto& p : _attachedPanes)
+            {
+                if (c == p.second.second)
+                {
+                    p.second.first = pt;
+                }
+            }
+        });
     }
 
     float TmuxControl::_ComputeSplitSize(int newSize, int originSize, SplitDirection direction)
@@ -324,12 +345,13 @@ namespace winrt::TerminalApp::implementation
         return resultPane;
     }
 
-    void TmuxControl::_NewWindowAndPane(int windowId, int paneId)
+    void TmuxControl::_NewWindowAndPane(int windowId, const std::wstring& windowName, int paneId)
     {
         auto rootPane = _NewPane(paneId);
-        _attachedPanes.insert({ paneId, rootPane });
+        _attachedPanes.insert({ paneId, {rootPane, rootPane->GetTerminalControl()}});
         auto tab = _page._CreateNewTabFromPane(rootPane);
-        _attachedTabs.insert({windowId, tab});
+        tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ windowName});
+        _attachedTabs.insert({windowId, {tab, rootPane}});
 
         // Check if we have output before we are ready
         auto search = _outputBacklog.find(paneId);
@@ -363,9 +385,24 @@ namespace winrt::TerminalApp::implementation
         auto t = search->second;
         _attachedTabs.erase(search);
 
-        t.Shutdown();
+        t.first.Shutdown();
+        // Remove all attached panes
+        auto rootPane = t.second;
+        rootPane->WalkTree([&](const auto& pt) {
+            for (auto p = _attachedPanes.begin(); p != _attachedPanes.end();)
+            {
+                if (p->second.first.get() == pt.get())
+                {
+                    p = _attachedPanes.erase(p);
+                }
+                else
+                {
+                    p++;
+                }
+            }
+        });
 
-        _page._RemoveTab(t);
+        _page._RemoveTab(t.first);
     }
 
     void TmuxControl::_EventHandle(Event& e)
@@ -378,6 +415,9 @@ namespace winrt::TerminalApp::implementation
             case DETACH:
                 _DetachSession();
                 break;
+            case LAYOUT_CHANGED:
+                _DiscoverPanes(_sessionId, e.windowId, false);
+                break;
             case OUTPUT:
                 _Output(e.paneId, e.response);
                 break;
@@ -386,11 +426,12 @@ namespace winrt::TerminalApp::implementation
                 _HandleCommand(e.response);
                 break;
             case SESSION_CHANGED:
+                _sessionId = e.sessionId;
                 _SetOption(std::format(L"default-size {}x{}", _width, _height));
-                _DiscoverWindows(e.sessionId);
+                _DiscoverWindows(_sessionId);
                 break;
             case WINDOW_ADD:
-                _DiscoverPanes(e.windowId);
+                _DiscoverPanes(_sessionId, e.windowId, true);
                 break;
             case WINDOW_CLOSE:
             case UNLINKED_WINDOW_CLOSE:
@@ -433,6 +474,7 @@ namespace winrt::TerminalApp::implementation
         }
         else if (std::regex_match(line, matches, REG_LAYOUT_CHANGED))
         {
+            _event.windowId = std::stoi(matches.str(1));
             _event.type = LAYOUT_CHANGED;
         }
         else if (std::regex_match(line, matches, REG_OUTPUT))
@@ -554,7 +596,7 @@ namespace winrt::TerminalApp::implementation
                     case SIGNLE_PANE:
                         {
                             rootPane = _NewPane(p.id);
-                            _attachedPanes.insert({ p.id, rootPane });
+                            _attachedPanes.insert({ p.id, {rootPane, rootPane->GetTerminalControl()} });
                             continue;
                         }
                     case SPLIT_HORIZONTAL:
@@ -573,14 +615,14 @@ namespace winrt::TerminalApp::implementation
                 if (search == _attachedPanes.end())
                 {
                     targetPane = _NewPane(p.id);
-                    _attachedPanes.insert({ p.id, targetPane });
+                    _attachedPanes.insert({ p.id, {targetPane, targetPane->GetTerminalControl()} });
                     if (rootPane == nullptr) {
                         rootPane = targetPane;
                     }
                 }
                 else
                 {
-                    targetPane = search->second;
+                    targetPane = search->second.first;
                 }
 
                 for (size_t i = 1; i < panes.size(); i++)
@@ -589,7 +631,7 @@ namespace winrt::TerminalApp::implementation
                     auto& p = panes.at(i);
 
                     auto pane = _NewPane(p.id);
-                    _attachedPanes.insert({ p.id, pane });
+                    _attachedPanes.insert({ p.id, {pane, pane->GetTerminalControl()} });
 
                     float splitSize;
                     if (direction == SplitDirection::Left)
@@ -607,11 +649,12 @@ namespace winrt::TerminalApp::implementation
                         rootSize -= (paneSize + 1);
                     }
                     targetPane = targetPane->AttachPane(pane, direction, splitSize);
-                    _attachedPanes.insert_or_assign(targetPandId, targetPane);
+                    _attachedPanes.erase(targetPandId);
+                    _attachedPanes.insert({targetPandId, {targetPane, targetPane->GetTerminalControl()}});
                 }
             }
             auto tab = _page._CreateNewTabFromPane(rootPane);
-            _attachedTabs.insert({w.windowId, tab});
+            _attachedTabs.insert({w.windowId, {tab, rootPane}});
             rootPane = nullptr;
 
             tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ w.name });
@@ -797,29 +840,45 @@ namespace winrt::TerminalApp::implementation
         return true;
     }
 
-    void TmuxControl::_DiscoverPanes(int windowId)
+    void TmuxControl::_DiscoverPanes(int sessionId, int windowId, bool addPane)
     {
+        if (_state != ATTACH_DONE)
+        {
+            return;
+        }
         auto cmd = std::make_unique<DiscoverPanes>();
+        cmd->sessionId = sessionId;
         cmd->windowId = windowId;
+        cmd->addPane = addPane;
         _SendCommand(std::move(cmd));
         _ScheduleCommand();
     }
 
     std::wstring TmuxControl::DiscoverPanes::GetCommand()
     {
-        return std::wstring(std::format(L"list-panes -F '"
-                                        L"#{{pane_id}}"
-                                        L"' -t @{}\n", this->windowId));
+        if (!this->addPane)
+        {
+            return std::wstring(std::format(L"list-panes -s -F '"
+                                            L"#{{pane_id}} #{{window_name}}"
+                                            L"' -t ${}\n", this->sessionId));
+        }
+        else
+        {
+            return std::wstring(std::format(L"list-panes -F '"
+                                            L"#{{pane_id}} #{{window_name}}"
+                                            L"' -t @{}\n", this->windowId));
+        }
     }
 
     bool TmuxControl::DiscoverPanes::HandleResult(std::wstring& result, TmuxControl& tmux)
     {
         std::wstring line;
-        std::wregex REG_PANE{ L"^%(\\d+)$" };
+        std::wregex REG_PANE{ L"^%(\\d+) (\\S+)$" };
 
         std::wstringstream in;
         in.str(result);
 
+        std::set<int> panes;
         while (std::getline(in, line, L'\n'))
         {
             std::wsmatch matches;
@@ -828,9 +887,35 @@ namespace winrt::TerminalApp::implementation
                 continue;
             }
             int paneId = std::stoi(matches.str(1));
-            std::wstring log(std::format(L"pane: {}\n", windowId));
-            tmux_log(L"   LOG: " + log);
-            tmux._NewWindowAndPane(this->windowId, paneId);
+            std::wstring windowName = matches.str(2);
+            //std::wstring log(std::format(L"pane: {}\n", windowId));
+            //tmux_log(L"   LOG: " + log);
+            if (this->addPane)
+            {
+                tmux._NewWindowAndPane(this->windowId, windowName, paneId);
+                return true;
+            }
+            panes.insert(paneId);
+        }
+
+        // For delete
+        for (auto p = tmux._attachedPanes.begin(); p != tmux._attachedPanes.end();)
+        {
+            if (!panes.contains(p->first))
+            {
+                auto pane = p->second.first;
+                p = tmux._attachedPanes.erase(p);
+                auto windowId = this->windowId;
+                //p.second.first->Closed([windowId, &tmux](auto&& /*s*/, auto && /*e*/) {
+                pane->ClosedByParent([windowId, &tmux]() {
+                    tmux._UpdateAttachedPane(windowId);
+                });
+                pane->Close();
+            }
+            else
+            {
+                p++;
+            }
         }
 
         return true;
