@@ -297,6 +297,8 @@ namespace winrt::TerminalApp::implementation
         void _CharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
         void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
         void _TermReadyHandler(int paneId, const std::wstring& text);
+        void _SplitHorizontal(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
+        void _SplitVertical(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
 
         void _UpdateAttachedPane(int windowId);
         float _ComputeSplitSize(int newSize, int originSize, winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);

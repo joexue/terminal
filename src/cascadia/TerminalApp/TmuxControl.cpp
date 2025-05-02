@@ -149,6 +149,13 @@ namespace winrt::TerminalApp::implementation
         _newTabButton.Visibility(Visibility::Collapsed);
         _newTmuxTabButton.Visibility(Visibility::Visible);
 
+        auto flyout = _newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
+        auto splitHorizontal = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
+        splitHorizontal.Click({ this, &TmuxControl::_SplitHorizontal });
+
+        auto splitVertical = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
+        splitVertical.Click({ this, &TmuxControl::_SplitVertical });
+
         tmux_log_open();
     }
 
@@ -241,6 +248,15 @@ namespace winrt::TerminalApp::implementation
     void TmuxControl::_TermReadyHandler(int paneId, const std::wstring& text)
     {
         _SendOutput(paneId, text);
+    }
+
+    void TmuxControl::_SplitHorizontal(const IInspectable&, const RoutedEventArgs&)
+    {
+        tmux_log(L"xxxx split horizontal\n");
+    }
+    void TmuxControl::_SplitVertical(const IInspectable&, const RoutedEventArgs&)
+    {
+        tmux_log(L"xxxx split vertical l\n");
     }
 
     void TmuxControl::_SendOutput(int paneId, const std::wstring& text)
