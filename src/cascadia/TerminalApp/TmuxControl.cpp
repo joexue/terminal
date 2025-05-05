@@ -55,36 +55,36 @@ static const int PaneBorderSize = 2;
 
 namespace winrt::TerminalApp::implementation
 {
-    const std::wregex TmuxControl::REG_BEGIN{ L"^%begin \\d+ \\d+ \\d+$" };
-    const std::wregex TmuxControl::REG_END{ L"^%end \\d+ \\d+ \\d+$" };
-    const std::wregex TmuxControl::REG_ERROR{ L"^%error \\d+ \\d+ \\d+$" };
+    const std::wregex TmuxControl::REG_BEGIN{ L"^%begin (\\d+) (\\d+) (\\d+)$" };
+    const std::wregex TmuxControl::REG_END{ L"^%end (\\d+) (\\d+) (\\d+)$" };
+    const std::wregex TmuxControl::REG_ERROR{ L"^%error (\\d+) (\\d+) (\\d+)$" };
 
-    const std::wregex TmuxControl::REG_CLIENT_SESSION_CHANGED{ L"^%client-session-changed \\S+ \\$\\d+ \\S+$" };
-    const std::wregex TmuxControl::REG_CLIENT_DETACHED{ L"^%client-detached \\S+$" };
-    const std::wregex TmuxControl::REG_CONFIG_ERROR{ L"^%config-error \\S+$" };
-    const std::wregex TmuxControl::REG_CONTINUE{ L"^%continue %\\d+$" };
+    const std::wregex TmuxControl::REG_CLIENT_SESSION_CHANGED{ L"^%client-session-changed (\\S+) \\$(\\d+) (\\S)+$" };
+    const std::wregex TmuxControl::REG_CLIENT_DETACHED{ L"^%client-detached (\\S+)$" };
+    const std::wregex TmuxControl::REG_CONFIG_ERROR{ L"^%config-error (\\S+)$" };
+    const std::wregex TmuxControl::REG_CONTINUE{ L"^%continue %(\\d+)$" };
     const std::wregex TmuxControl::REG_DETACH{ L"^\033$" };
     const std::wregex TmuxControl::REG_EXIT{ L"^%exit$" };
-    const std::wregex TmuxControl::REG_EXTENDED_OUTPUT{ L"^%extended-output %\\d+ \\S+$" };
+    const std::wregex TmuxControl::REG_EXTENDED_OUTPUT{ L"^%extended-output %(\\d+) (\\S+)$" };
     const std::wregex TmuxControl::REG_LAYOUT_CHANGED{ L"^%layout-change @(\\d+) ([\\dabcdefABCDEF]{4}),(\\S+)( \\S+)*$" };
-    const std::wregex TmuxControl::REG_MESSAGE{ L"^%message \\S+$" };
+    const std::wregex TmuxControl::REG_MESSAGE{ L"^%message (\\S+)$" };
     const std::wregex TmuxControl::REG_OUTPUT{ L"^%output %(\\d+) (.+)$" };
-    const std::wregex TmuxControl::REG_PANE_MODE_CHANGED{ L"^%pane-mode-changed %\\d+$" };
-    const std::wregex TmuxControl::REG_PASTE_BUFFER_CHANGED{ L"^%paste-buffer-changed \\S+$" };
-    const std::wregex TmuxControl::REG_PASTE_BUFFER_DELETED{ L"^%paste-buffer-deleted \\S+$" };
-    const std::wregex TmuxControl::REG_PAUSE{ L"^%pause %\\d+$" };
-    const std::wregex TmuxControl::REG_SESSION_CHANGED{ L"^%session-changed \\$(\\d+) \\S+$" };
-    const std::wregex TmuxControl::REG_SESSION_RENAMED{ L"^%session-renamed \\S+$" };
-    const std::wregex TmuxControl::REG_SESSION_WINDOW_CHANGED{ L"^%session-window-changed @(\\d+) \\d+$" };
+    const std::wregex TmuxControl::REG_PANE_MODE_CHANGED{ L"^%pane-mode-changed %(\\d+)$" };
+    const std::wregex TmuxControl::REG_PASTE_BUFFER_CHANGED{ L"^%paste-buffer-changed (\\S+)$" };
+    const std::wregex TmuxControl::REG_PASTE_BUFFER_DELETED{ L"^%paste-buffer-deleted (\\S+)$" };
+    const std::wregex TmuxControl::REG_PAUSE{ L"^%pause %(\\d+)$" };
+    const std::wregex TmuxControl::REG_SESSION_CHANGED{ L"^%session-changed \\$(\\d+) (\\S+)$" };
+    const std::wregex TmuxControl::REG_SESSION_RENAMED{ L"^%session-renamed (\\S+)$" };
+    const std::wregex TmuxControl::REG_SESSION_WINDOW_CHANGED{ L"^%session-window-changed @(\\d+) (\\d+)$" };
     const std::wregex TmuxControl::REG_SESSIONS_CHANGED{ L"^%sessions-changed$" };
-    const std::wregex TmuxControl::REG_SUBSCRIPTION_CHANGED{ L"^%subscription-changed \\S+$" };
-    const std::wregex TmuxControl::REG_UNLINKED_WINDOW_ADD{ L"^%unlinked-window-add @\\d+$" };
+    const std::wregex TmuxControl::REG_SUBSCRIPTION_CHANGED{ L"^%subscription-changed (\\S+)$" };
+    const std::wregex TmuxControl::REG_UNLINKED_WINDOW_ADD{ L"^%unlinked-window-add @(\\d+)$" };
     const std::wregex TmuxControl::REG_UNLINKED_WINDOW_CLOSE{ L"^%unlinked-window-close @(\\d+)$" };
-    const std::wregex TmuxControl::REG_UNLINKED_WINDOW_RENAMED{ L"^%unlinked-window-renamed @\\d+$" };
+    const std::wregex TmuxControl::REG_UNLINKED_WINDOW_RENAMED{ L"^%unlinked-window-renamed @(\\d+)$" };
     const std::wregex TmuxControl::REG_WINDOW_ADD{ L"^%window-add @(\\d+)$" };
     const std::wregex TmuxControl::REG_WINDOW_CLOSE{ L"^%window-close @(\\d+)$" };
-    const std::wregex TmuxControl::REG_WINDOW_PANE_CHANGED{ L"^%window-pane-changed @\\d+ %\\d+$" };
-    const std::wregex TmuxControl::REG_WINDOW_RENAMED{ L"^%window-renamed @\\d+ \\S+$" };
+    const std::wregex TmuxControl::REG_WINDOW_PANE_CHANGED{ L"^%window-pane-changed @(\\d+) %(\\d+)$" };
+    const std::wregex TmuxControl::REG_WINDOW_RENAMED{ L"^%window-renamed @(\\d+) (\\S+)$" };
 
     TmuxControl::TmuxControl(TerminalPage& page, std::shared_ptr<Pane> pane) :
         _page(page)
@@ -151,10 +151,10 @@ namespace winrt::TerminalApp::implementation
 
         auto flyout = _newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
         auto splitHorizontal = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
-        splitHorizontal.Click({ this, &TmuxControl::_SplitHorizontal });
+        splitHorizontal.Click({ this, &TmuxControl::_SplitPaneHorizontal });
 
-        auto splitVertical = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
-        splitVertical.Click({ this, &TmuxControl::_SplitVertical });
+        auto splitVertical = flyout.Items().GetAt(1).try_as<Controls::MenuFlyoutItem>();
+        splitVertical.Click({ this, &TmuxControl::_SplitPaneVertical });
 
         tmux_log_open();
     }
@@ -250,14 +250,16 @@ namespace winrt::TerminalApp::implementation
         _SendOutput(paneId, text);
     }
 
-    void TmuxControl::_SplitHorizontal(const IInspectable&, const RoutedEventArgs&)
+    void TmuxControl::_SplitPaneHorizontal(const IInspectable&, const RoutedEventArgs&)
     {
-        tmux_log(L"xxxx split horizontal\n");
+        _SplitPane(SplitDirection::Right);
     }
-    void TmuxControl::_SplitVertical(const IInspectable&, const RoutedEventArgs&)
+
+    void TmuxControl::_SplitPaneVertical(const IInspectable&, const RoutedEventArgs&)
     {
-        tmux_log(L"xxxx split vertical l\n");
+        _SplitPane(SplitDirection::Down);
     }
+
 
     void TmuxControl::_SendOutput(int paneId, const std::wstring& text)
     {
@@ -338,7 +340,12 @@ namespace winrt::TerminalApp::implementation
         }
 
         auto f = round(newSize  * fontSize + amend1) / round(originSize  * fontSize + amend2);
-        return 1 - (float)f;
+        if (direction == SplitDirection::Left || direction == SplitDirection::Up)
+        {
+            f = 1 - f;
+        }
+
+        return (float)f;
     }
 
     std::shared_ptr<Pane> TmuxControl::_NewPane(int paneId)
@@ -421,6 +428,44 @@ namespace winrt::TerminalApp::implementation
         _page._RemoveTab(t.first);
     }
 
+    void TmuxControl::_SplitPaneHandle(int paneId)
+    {
+        // Only handle the split pane
+        auto search = _attachedPanes.find(paneId);
+        if (search != _attachedPanes.end())
+        {
+            return;
+        }
+
+        auto pid = _splittingPane.paneId;
+        auto pane = _splittingPane.pane;
+        auto direction = _splittingPane.direction;
+
+        auto newPane = _NewPane(paneId);
+        _attachedPanes.insert({ paneId, {newPane, newPane->GetTerminalControl()} });
+
+        auto c = pane->GetTerminalControl();
+
+        int originSize;
+        if (direction == SplitDirection::Right)
+        {
+            originSize = c.ViewWidth();
+        }
+        else
+        {
+            originSize = c.ViewHeight();
+        }
+
+        auto newSize = originSize/2;
+
+        auto splitSize = _ComputeSplitSize(originSize - newSize, originSize, direction);
+
+        pane = pane->AttachPane(newPane, direction, splitSize);
+        _attachedPanes.erase(pid);
+        _attachedPanes.insert({pid, {pane, pane->GetTerminalControl()}});
+        _splittingPane.pane = nullptr;
+    }
+
     void TmuxControl::_EventHandle(Event& e)
     {
         switch(e.type)
@@ -452,6 +497,9 @@ namespace winrt::TerminalApp::implementation
             case WINDOW_CLOSE:
             case UNLINKED_WINDOW_CLOSE:
                 _WindowClose(e.windowId);
+                break;
+            case WINDOW_PANE_CHANGED:
+                _SplitPaneHandle(e.paneId);
                 break;
 
             default:
@@ -517,6 +565,8 @@ namespace winrt::TerminalApp::implementation
         else if (std::regex_match(line, matches, REG_WINDOW_PANE_CHANGED))
         {
             _event.type = WINDOW_PANE_CHANGED;
+            _event.windowId = std::stoi(matches.str(1));
+            _event.paneId = std::stoi(matches.str(2));
         }
         else if (std::regex_match(line, matches, REG_WINDOW_RENAMED))
         {
@@ -1151,6 +1201,46 @@ namespace winrt::TerminalApp::implementation
     std::wstring TmuxControl::SetOption::GetCommand()
     {
         return std::wstring(std::format(L"set-option {}\n", this->option));
+    }
+
+    void TmuxControl::_SplitPane(SplitDirection direction)
+    {
+        if (_splittingPane.pane != nullptr)
+        {
+            return;
+        }
+
+        if (const auto tab{ _page._GetFocusedTabImpl() })
+        {
+            if (const auto activePane = tab->GetActivePane())
+            {
+                for (const auto& p : _attachedPanes)
+                {
+                    if (p.second.first.get() == activePane.get())
+                    {
+                        _splittingPane = {p.first, activePane, direction};
+                        auto cmd = std::make_unique<SplitPane>();
+                        cmd->direction = direction;
+                        cmd->paneId = p.first;
+                        _SendCommand(std::move(cmd));
+                        _ScheduleCommand();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    std::wstring TmuxControl::SplitPane::GetCommand()
+    {
+        if (this->direction == SplitDirection::Right)
+        {
+            return std::wstring(std::format(L"split-window -h -t %{}\n", this->paneId));
+        }
+        else
+        {
+            return std::wstring(std::format(L"split-window -v -t %{}\n", this->paneId));
+        }
     }
 
     // from controller to tmux

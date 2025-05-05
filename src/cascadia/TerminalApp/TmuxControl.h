@@ -239,6 +239,7 @@ namespace winrt::TerminalApp::implementation
             std::wstring GetCommand() override;
 
             int paneId;
+            winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction;
         };
 
         // Layout structs
@@ -287,6 +288,13 @@ namespace winrt::TerminalApp::implementation
             bool active;
         };
 
+        struct SplittingPane
+        {
+            int paneId;
+            std::shared_ptr<Pane> pane;
+            winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction;
+        };
+
         // Private methods
         void _AttachSession();
         void _DetachSession();
@@ -297,8 +305,8 @@ namespace winrt::TerminalApp::implementation
         void _CharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
         void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
         void _TermReadyHandler(int paneId, const std::wstring& text);
-        void _SplitHorizontal(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
-        void _SplitVertical(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
+        void _SplitPaneHorizontal(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
+        void _SplitPaneVertical(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
 
         void _UpdateAttachedPane(int windowId);
         float _ComputeSplitSize(int newSize, int originSize, winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
@@ -328,6 +336,8 @@ namespace winrt::TerminalApp::implementation
         void _ResizeWindow(int windowId, int width, int height);
         void _SendKey(int paneId, const std::wstring keys);
         void _SetOption(const std::wstring& option);
+        void _SplitPane(winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
+        void _SplitPaneHandle(int paneId);
 
         void _HandleCommand(std::wstring& result);
         void _SendCommand(std::unique_ptr<Command> cmd);
@@ -360,5 +370,6 @@ namespace winrt::TerminalApp::implementation
         ::winrt::Windows::UI::Xaml::Thickness _thickness;
         std::wstring _padding;
         int _sessionId;
+        SplittingPane _splittingPane {-1, nullptr, winrt::Microsoft::Terminal::Settings::Model::SplitDirection::Left};
     };
 }
