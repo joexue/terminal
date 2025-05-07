@@ -270,7 +270,7 @@ namespace winrt::TerminalApp::implementation
             return;
         }
 
-        auto p = search->second.first;
+        auto p = search->second.pane;
         auto c = p->GetTerminalControl();
 
         if (c.ViewHeight() != 0) {
@@ -303,9 +303,9 @@ namespace winrt::TerminalApp::implementation
             auto c = pt->GetTerminalControl();
             for (auto& p : _attachedPanes)
             {
-                if (c == p.second.second)
+                if (c == p.second.control)
                 {
-                    p.second.first = pt;
+                    p.second.pane = pt;
                 }
             }
         });
@@ -365,13 +365,13 @@ namespace winrt::TerminalApp::implementation
             return _KeyHandler(paneId, e);
         });
 
+        _attachedPanes.insert({ paneId, {paneId, resultPane, control} });
         return resultPane;
     }
 
     void TmuxControl::_NewWindowAndPane(int windowId, const std::wstring& windowName, int paneId)
     {
         auto rootPane = _NewPane(paneId);
-        _attachedPanes.insert({ paneId, {rootPane, rootPane->GetTerminalControl()}});
         auto tab = _page._CreateNewTabFromPane(rootPane);
         tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ windowName});
         _attachedTabs.insert({windowId, {tab, rootPane}});
@@ -414,7 +414,7 @@ namespace winrt::TerminalApp::implementation
         rootPane->WalkTree([&](const auto& pt) {
             for (auto p = _attachedPanes.begin(); p != _attachedPanes.end();)
             {
-                if (p->second.first.get() == pt.get())
+                if (p->second.pane.get() == pt.get())
                 {
                     p = _attachedPanes.erase(p);
                 }
@@ -442,7 +442,6 @@ namespace winrt::TerminalApp::implementation
         auto direction = _splittingPane.direction;
 
         auto newPane = _NewPane(paneId);
-        _attachedPanes.insert({ paneId, {newPane, newPane->GetTerminalControl()} });
 
         auto c = pane->GetTerminalControl();
 
@@ -462,7 +461,7 @@ namespace winrt::TerminalApp::implementation
 
         pane = pane->AttachPane(newPane, direction, splitSize);
         _attachedPanes.erase(pid);
-        _attachedPanes.insert({pid, {pane, pane->GetTerminalControl()}});
+        _attachedPanes.insert({pid, {pid, pane, pane->GetTerminalControl()}});
         _splittingPane.pane = nullptr;
     }
 
@@ -662,7 +661,6 @@ namespace winrt::TerminalApp::implementation
                     case SIGNLE_PANE:
                         {
                             rootPane = _NewPane(p.id);
-                            _attachedPanes.insert({ p.id, {rootPane, rootPane->GetTerminalControl()} });
                             continue;
                         }
                     case SPLIT_HORIZONTAL:
@@ -677,18 +675,17 @@ namespace winrt::TerminalApp::implementation
 
                 auto search = _attachedPanes.find(p.id);
                 std::shared_ptr<Pane> targetPane{ nullptr };
-                int targetPandId = p.id;
+                int targetPaneId = p.id;
                 if (search == _attachedPanes.end())
                 {
                     targetPane = _NewPane(p.id);
-                    _attachedPanes.insert({ p.id, {targetPane, targetPane->GetTerminalControl()} });
                     if (rootPane == nullptr) {
                         rootPane = targetPane;
                     }
                 }
                 else
                 {
-                    targetPane = search->second.first;
+                    targetPane = search->second.pane;
                 }
 
                 for (size_t i = 1; i < panes.size(); i++)
@@ -697,7 +694,6 @@ namespace winrt::TerminalApp::implementation
                     auto& p = panes.at(i);
 
                     auto pane = _NewPane(p.id);
-                    _attachedPanes.insert({ p.id, {pane, pane->GetTerminalControl()} });
 
                     float splitSize;
                     if (direction == SplitDirection::Left)
@@ -715,8 +711,8 @@ namespace winrt::TerminalApp::implementation
                         rootSize -= (paneSize + 1);
                     }
                     targetPane = targetPane->AttachPane(pane, direction, splitSize);
-                    _attachedPanes.erase(targetPandId);
-                    _attachedPanes.insert({targetPandId, {targetPane, targetPane->GetTerminalControl()}});
+                    _attachedPanes.erase(targetPaneId);
+                    _attachedPanes.insert({targetPaneId, {targetPaneId, targetPane, targetPane->GetTerminalControl()}});
                 }
             }
             auto tab = _page._CreateNewTabFromPane(rootPane);
@@ -969,7 +965,7 @@ namespace winrt::TerminalApp::implementation
         {
             if (!panes.contains(p->first))
             {
-                auto pane = p->second.first;
+                auto pane = p->second.pane;
                 p = tmux._attachedPanes.erase(p);
                 auto windowId = this->windowId;
                 //p.second.first->Closed([windowId, &tmux](auto&& /*s*/, auto && /*e*/) {
@@ -1216,7 +1212,7 @@ namespace winrt::TerminalApp::implementation
             {
                 for (const auto& p : _attachedPanes)
                 {
-                    if (p.second.first.get() == activePane.get())
+                    if (p.second.pane.get() == activePane.get())
                     {
                         _splittingPane = {p.first, activePane, direction};
                         auto cmd = std::make_unique<SplitPane>();

@@ -295,6 +295,13 @@ namespace winrt::TerminalApp::implementation
             winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction;
         };
 
+        struct AttachedPane
+        {
+            int paneId;
+            std::shared_ptr<Pane> pane;
+            winrt::Microsoft::Terminal::Control::TermControl control;
+        };
+
         // Private methods
         void _AttachSession();
         void _DetachSession();
@@ -356,7 +363,7 @@ namespace winrt::TerminalApp::implementation
 
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
-        std::unordered_map<int, std::pair<std::shared_ptr<Pane>, winrt::Microsoft::Terminal::Control::TermControl>> _attachedPanes;
+        std::unordered_map<int, AttachedPane> _attachedPanes;
         std::unordered_map<int, std::pair<TerminalApp::TerminalTab, std::shared_ptr<Pane>>> _attachedTabs;
         std::unordered_map<int, winrt::Microsoft::Terminal::Control::TermControl> _attachedControl;
         std::unordered_map<int, std::wstring> _outputBacklog;
