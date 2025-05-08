@@ -206,6 +206,17 @@ namespace winrt::TerminalApp::implementation
         _SendKey(paneId, keys);
     }
 
+    void TmuxControl::_FocusHandler(int paneId)
+    {
+        if (_activePaneId == paneId)
+        {
+            return;
+        }
+
+        tmux_log(std::format(L"xxxxxxxxxxxxxxx id={}\n", paneId));
+        _activePaneId = paneId;
+    }
+
     // Poor version keymap
     void TmuxControl::_KeyHandler(int paneId, const Control::KeySentEventArgs& args)
     {
@@ -245,11 +256,6 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
-    void TmuxControl::_TermReadyHandler(int paneId, const std::wstring& text)
-    {
-        _SendOutput(paneId, text);
-    }
-
     void TmuxControl::_SplitPaneHorizontal(const IInspectable&, const RoutedEventArgs&)
     {
         _SplitPane(SplitDirection::Right);
@@ -260,6 +266,10 @@ namespace winrt::TerminalApp::implementation
         _SplitPane(SplitDirection::Down);
     }
 
+    void TmuxControl::_TermReadyHandler(int paneId, const std::wstring& text)
+    {
+        _SendOutput(paneId, text);
+    }
 
     void TmuxControl::_SendOutput(int paneId, const std::wstring& text)
     {
@@ -348,6 +358,19 @@ namespace winrt::TerminalApp::implementation
         return (float)f;
     }
 
+    std::shared_ptr<Pane> TmuxControl::_GetActivePane()
+    {
+        std::shared_ptr<Pane> activePane;
+        auto search = _attachedPanes.find(_activePaneId);
+        if (search == _attachedPanes.end())
+        {
+            return activePane;
+        }
+
+        activePane = search->second.pane;
+        return activePane;
+    }
+
     std::shared_ptr<Pane> TmuxControl::_NewPane(int paneId)
     {
         auto connection = TerminalConnection::DumyConnection{};
@@ -361,8 +384,13 @@ namespace winrt::TerminalApp::implementation
         control.CharSent([this, paneId](auto& /*i*/, auto& e) {
             return _CharHandler(paneId, e);
         });
+
         control.KeySent([this, paneId](auto& /*i*/, auto& e) {
             return _KeyHandler(paneId, e);
+        });
+
+        control.GotFocus([this, paneId](auto, auto) {
+            return _FocusHandler(paneId);
         });
 
         _attachedPanes.insert({ paneId, {paneId, resultPane, control} });
@@ -428,7 +456,7 @@ namespace winrt::TerminalApp::implementation
         _page._RemoveTab(t.first);
     }
 
-    void TmuxControl::_SplitPaneHandle(int paneId)
+    void TmuxControl::_HandleSplitPane(int paneId)
     {
         // Only handle the split pane
         auto search = _attachedPanes.find(paneId);
@@ -463,6 +491,8 @@ namespace winrt::TerminalApp::implementation
         _attachedPanes.erase(pid);
         _attachedPanes.insert({pid, {pid, pane, pane->GetTerminalControl()}});
         _splittingPane.pane = nullptr;
+
+        newPane->GetTerminalControl().Focus(FocusState::Programmatic);
     }
 
     void TmuxControl::_EventHandle(Event& e)
@@ -498,7 +528,7 @@ namespace winrt::TerminalApp::implementation
                 _WindowClose(e.windowId);
                 break;
             case WINDOW_PANE_CHANGED:
-                _SplitPaneHandle(e.paneId);
+                _HandleSplitPane(e.paneId);
                 break;
 
             default:
@@ -1206,6 +1236,16 @@ namespace winrt::TerminalApp::implementation
             return;
         }
 
+        auto activePane = _GetActivePane();
+
+        _splittingPane = {_activePaneId, activePane, direction};
+        auto cmd = std::make_unique<SplitPane>();
+        cmd->direction = direction;
+        cmd->paneId = _splittingPane.paneId;
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+
+#if 0
         if (const auto tab{ _page._GetFocusedTabImpl() })
         {
             if (const auto activePane = tab->GetActivePane())
@@ -1225,6 +1265,7 @@ namespace winrt::TerminalApp::implementation
                 }
             }
         }
+#endif
     }
 
     std::wstring TmuxControl::SplitPane::GetCommand()
