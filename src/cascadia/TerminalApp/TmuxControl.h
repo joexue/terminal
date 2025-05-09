@@ -297,6 +297,7 @@ namespace winrt::TerminalApp::implementation
 
         struct AttachedPane
         {
+            int windowId;
             int paneId;
             std::shared_ptr<Pane> pane;
             winrt::Microsoft::Terminal::Control::TermControl control;
@@ -310,7 +311,7 @@ namespace winrt::TerminalApp::implementation
         void _NewTabButtonHandler(const Microsoft::UI::Xaml::Controls::SplitButton& SplitButton, const Microsoft::UI::Xaml::Controls::SplitButtonClickEventArgs& args);
 
         void _CharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
-        void _FocusHandler(int paneId);
+        void _FocusHandler(int windowId, int paneId);
         void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
         void _SplitPaneHorizontal(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
         void _SplitPaneVertical(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
@@ -320,7 +321,7 @@ namespace winrt::TerminalApp::implementation
         float _ComputeSplitSize(int newSize, int originSize, winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
         void _SendOutput(int paneId, const std::wstring& text);
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
-        std::shared_ptr<Pane> _NewPane(int paneId);
+        std::shared_ptr<Pane> _NewPane(int windowId, int paneId);
         std::shared_ptr<Pane> _GetActivePane();
         void _WindowClose(int windowId);
         void _Output(int paneId, const std::wstring& result);
@@ -347,7 +348,7 @@ namespace winrt::TerminalApp::implementation
         void _SetOption(const std::wstring& option);
         void _SplitPane(winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
 
-        void _HandleSplitPane(int paneId);
+        void _HandleSplitPane(int windowId, int paneId);
         void _HandleCommand(std::wstring& result);
         void _SendCommand(std::unique_ptr<Command> cmd);
         void _ScheduleCommand();
@@ -380,7 +381,7 @@ namespace winrt::TerminalApp::implementation
         std::wstring _padding;
         int _sessionId;
         SplittingPane _splittingPane {-1, nullptr, winrt::Microsoft::Terminal::Settings::Model::SplitDirection::Left};
-        AttachedPane _activePane {-1, nullptr, nullptr};
         int _activePaneId{ -1 };
+        int _activeWindowId{ -1 };
     };
 }
