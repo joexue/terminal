@@ -323,6 +323,7 @@ namespace winrt::TerminalApp::implementation
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
         std::shared_ptr<Pane> _NewPane(int windowId, int paneId);
         std::shared_ptr<Pane> _GetActivePane();
+        TerminalApp::TerminalTab _GetTab(int windowId);
         void _WindowClose(int windowId);
         void _Output(int paneId, const std::wstring& result);
 
