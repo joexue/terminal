@@ -316,6 +316,7 @@ namespace winrt::TerminalApp::implementation
         void _SplitPaneHorizontal(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
         void _SplitPaneVertical(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
         void _TermReadyHandler(int paneId, const std::wstring& text);
+        void _WindowSizeChangedHandler(const Windows::Foundation::IInspectable& sender, const winrt::Windows::UI::Xaml::SizeChangedEventArgs& args);
 
         void _UpdateAttachedPane(int windowId);
         float _ComputeSplitSize(int newSize, int originSize, winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);

@@ -156,6 +156,8 @@ namespace winrt::TerminalApp::implementation
         auto splitVertical = flyout.Items().GetAt(1).try_as<Controls::MenuFlyoutItem>();
         splitVertical.Click({ this, &TmuxControl::_SplitPaneVertical });
 
+        _page.SizeChanged({this, &TmuxControl::_WindowSizeChangedHandler});
+        //_page.SizeChanged
         tmux_log_open();
     }
 
@@ -286,6 +288,16 @@ namespace winrt::TerminalApp::implementation
     void TmuxControl::_TermReadyHandler(int paneId, const std::wstring& text)
     {
         _SendOutput(paneId, text);
+    }
+
+    void TmuxControl::_WindowSizeChangedHandler(const IInspectable&, const SizeChangedEventArgs&)
+    {
+        auto fontSize = _core.CharacterDimensions();
+        auto x = _page.ActualWidth();
+        auto y = _page.ActualHeight();
+
+        _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
+        _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
     }
 
     void TmuxControl::_SendOutput(int paneId, const std::wstring& text)
