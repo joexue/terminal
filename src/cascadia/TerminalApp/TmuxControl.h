@@ -291,7 +291,7 @@ namespace winrt::TerminalApp::implementation
         struct SplittingPane
         {
             int paneId;
-            std::shared_ptr<Pane> pane;
+            //std::shared_ptr<Pane> pane;
             winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction;
         };
 
@@ -299,7 +299,7 @@ namespace winrt::TerminalApp::implementation
         {
             int windowId;
             int paneId;
-            std::shared_ptr<Pane> pane;
+            //std::shared_ptr<Pane> pane;
             winrt::Microsoft::Terminal::Control::TermControl control;
         };
 
@@ -318,12 +318,12 @@ namespace winrt::TerminalApp::implementation
         void _TermReadyHandler(int paneId, const std::wstring& text);
         void _WindowSizeChangedHandler(const Windows::Foundation::IInspectable& sender, const winrt::Windows::UI::Xaml::SizeChangedEventArgs& args);
 
-        void _UpdateAttachedPane(int windowId);
+        //void _UpdateAttachedPane(int windowId);
         float _ComputeSplitSize(int newSize, int originSize, winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
         void _SendOutput(int paneId, const std::wstring& text);
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
         std::shared_ptr<Pane> _NewPane(int windowId, int paneId);
-        std::shared_ptr<Pane> _GetActivePane();
+        //std::shared_ptr<Pane> _GetActivePane();
         TerminalApp::TerminalTab _GetTab(int windowId);
         void _WindowClose(int windowId);
         void _Output(int paneId, const std::wstring& result);
@@ -382,7 +382,7 @@ namespace winrt::TerminalApp::implementation
         ::winrt::Windows::UI::Xaml::Thickness _thickness;
         std::wstring _padding;
         int _sessionId;
-        SplittingPane _splittingPane {-1, nullptr, winrt::Microsoft::Terminal::Settings::Model::SplitDirection::Left};
+        SplittingPane _splittingPane {-1, winrt::Microsoft::Terminal::Settings::Model::SplitDirection::Left};
         int _activePaneId{ -1 };
         int _activeWindowId{ -1 };
     };
