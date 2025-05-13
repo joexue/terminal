@@ -116,21 +116,21 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             virtual std::wstring GetCommand() = 0;
-            virtual bool HandleResult(std::wstring& /*result*/, TmuxControl& /*tmux*/) { return true; };
+            virtual bool HandleResult(const std::wstring& /*result*/, TmuxControl& /*tmux*/) { return true; };
         };
 
         struct AttachDone : public Command
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+            bool HandleResult(const std::wstring& result, TmuxControl& tmux) override;
         };
 
         struct CapturePane : public Command
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+            bool HandleResult(const std::wstring& result, TmuxControl& tmux) override;
 
             int paneId;
             int cursorX;
@@ -141,7 +141,7 @@ namespace winrt::TerminalApp::implementation
         struct DiscoverPanes : public Command {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+            bool HandleResult(const std::wstring& result, TmuxControl& tmux) override;
 
             int sessionId;
             int windowId;
@@ -151,7 +151,7 @@ namespace winrt::TerminalApp::implementation
         struct DiscoverWindows : public Command {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+            bool HandleResult(const std::wstring& result, TmuxControl& tmux) override;
 
             int sessionId;
         };
@@ -160,7 +160,7 @@ namespace winrt::TerminalApp::implementation
         {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+            bool HandleResult(const std::wstring& result, TmuxControl& tmux) override;
 
             int windowId;
             int history;
@@ -169,7 +169,7 @@ namespace winrt::TerminalApp::implementation
         struct ListWindow : public Command {
         public:
             std::wstring GetCommand() override;
-            bool HandleResult(std::wstring& result, TmuxControl& tmux) override;
+            bool HandleResult(const std::wstring& result, TmuxControl& tmux) override;
 
             int windowId;
             int sessionId;
@@ -304,6 +304,7 @@ namespace winrt::TerminalApp::implementation
         };
 
         // Private methods
+        void _PrintString(const std::wstring string);
         void _AttachSession();
         void _DetachSession();
 
@@ -332,7 +333,7 @@ namespace winrt::TerminalApp::implementation
         bool _SyncPaneState(std::vector<TmuxPane> panes, int history);
         std::vector<Layout> _ParseLayout(std::wstring& layout);
 
-        void _EventHandle(Event& e);
+        void _EventHandle(const Event& e);
         void _Parse(const std::wstring& buffer);
         bool _Advance(wchar_t ch);
 
@@ -351,7 +352,7 @@ namespace winrt::TerminalApp::implementation
         void _SplitPane(winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
 
         void _HandleSplitPane(int windowId, int paneId);
-        void _HandleCommand(std::wstring& result);
+        void _HandleCommand(const std::wstring& result);
         void _SendCommand(std::unique_ptr<Command> cmd);
         void _ScheduleCommand();
 
@@ -385,5 +386,7 @@ namespace winrt::TerminalApp::implementation
         SplittingPane _splittingPane {-1, winrt::Microsoft::Terminal::Settings::Model::SplitDirection::Left};
         int _activePaneId{ -1 };
         int _activeWindowId{ -1 };
+        bool _escapeDcs { false };
+        std::function<void(const std::wstring_view string)> _print;
     };
 }
