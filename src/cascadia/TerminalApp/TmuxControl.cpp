@@ -95,7 +95,7 @@ namespace winrt::TerminalApp::implementation
         _core = pane->GetTerminalControl();
         _core.SetTmuxControlHandlerProducer([this](auto print) {
             //print(L"Running the TMUX control mode, press 'q' to detach: ");
-            _print = print;
+            _Print = print;
             return [this](const auto ch) mutable {
                 return _Advance(ch);
             };
@@ -457,7 +457,7 @@ namespace winrt::TerminalApp::implementation
         _page._RemoveTab(t.first);
     }
 
-    void TmuxControl::_HandleSplitPane(int windowId, int newPaneId)
+    void TmuxControl::_SplitPaneHandler(int windowId, int newPaneId)
     {
         // Only handle the split pane
         auto search = _attachedPanes.find(newPaneId);
@@ -495,7 +495,7 @@ namespace winrt::TerminalApp::implementation
         _splittingPane.paneId = -1;
     }
 
-    void TmuxControl::_EventHandle(const Event& e)
+    void TmuxControl::_EventHandler(const Event& e)
     {
         switch(e.type)
         {
@@ -520,7 +520,7 @@ namespace winrt::TerminalApp::implementation
                 break;
             // Commands response
             case RESPONSE:
-                _HandleCommand(e.response);
+                _CommandHandler(e.response);
                 break;
             case SESSION_CHANGED:
                 _sessionId = e.sessionId;
@@ -535,7 +535,7 @@ namespace winrt::TerminalApp::implementation
                 _WindowClose(e.windowId);
                 break;
             case WINDOW_PANE_CHANGED:
-                _HandleSplitPane(e.windowId, e.paneId);
+                _SplitPaneHandler(e.windowId, e.paneId);
                 break;
 
             default:
@@ -570,7 +570,7 @@ namespace winrt::TerminalApp::implementation
         else if (std::regex_match(line, REG_ERROR))
         {
             // Remove the extra \n we added
-            _print(std::wstring(_event.response.begin(), _event.response.end() - 1));
+            _Print(std::wstring(_event.response.begin(), _event.response.end() - 1));
             _event.type = NOTHING;
         }
         // tmux specific rules
@@ -636,7 +636,7 @@ namespace winrt::TerminalApp::implementation
         {
             auto e = _event;
             _dispatcherQueue.TryEnqueue([this, e]() {
-                _EventHandle(e);
+                _EventHandler(e);
             });
             _event.response.clear();
         }
@@ -909,7 +909,7 @@ namespace winrt::TerminalApp::implementation
         return std::wstring(std::format(L"list-session\n"));
     }
 
-    bool TmuxControl::AttachDone::HandleResult(const std::wstring& /*result*/, TmuxControl& tmux)
+    bool TmuxControl::AttachDone::ResultHandler(const std::wstring& /*result*/, TmuxControl& tmux)
     {
         if (tmux._cmdQueue.size() > 1)
         {
@@ -939,7 +939,7 @@ namespace winrt::TerminalApp::implementation
         return std::wstring(std::format(L"capture-pane -p -t %{} -e -C -S {}\n", this->paneId, this->history * -1));
     }
 
-    bool TmuxControl::CapturePane::HandleResult(const std::wstring& result, TmuxControl& tmux)
+    bool TmuxControl::CapturePane::ResultHandler(const std::wstring& result, TmuxControl& tmux)
     {
         // Tmux output has an extra newline
         auto output = result;
@@ -980,7 +980,7 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
-    bool TmuxControl::DiscoverPanes::HandleResult(const std::wstring& result, TmuxControl& tmux)
+    bool TmuxControl::DiscoverPanes::ResultHandler(const std::wstring& result, TmuxControl& tmux)
     {
         std::wstring line;
         std::wregex REG_PANE{ L"^%(\\d+) (\\S+)$" };
@@ -1049,7 +1049,7 @@ namespace winrt::TerminalApp::implementation
                                         L"' -t ${}\n", this->sessionId));
     }
 
-    bool TmuxControl::DiscoverWindows::HandleResult(const std::wstring& result, TmuxControl& tmux)
+    bool TmuxControl::DiscoverWindows::ResultHandler(const std::wstring& result, TmuxControl& tmux)
     {
         std::wstring line;
         std::wregex REG_WINDOW{ L"^@(\\d+)$" };
@@ -1093,7 +1093,7 @@ namespace winrt::TerminalApp::implementation
                                         this->windowId));
     }
 
-    bool TmuxControl::ListPanes::HandleResult(const std::wstring& result, TmuxControl& tmux)
+    bool TmuxControl::ListPanes::ResultHandler(const std::wstring& result, TmuxControl& tmux)
     {
         std::wstring line;
         std::wregex REG_PANE{ L"^\\$(\\d+) @(\\d+) %(\\d+) (\\d+) (\\d+) (\\d+)$" };
@@ -1151,7 +1151,7 @@ namespace winrt::TerminalApp::implementation
                                         L"' -t ${}\n", this->sessionId));
     }
 
-    bool TmuxControl::ListWindow::HandleResult(const std::wstring& result, TmuxControl& tmux)
+    bool TmuxControl::ListWindow::ResultHandler(const std::wstring& result, TmuxControl& tmux)
     {
         std::wstring line;
         std::wregex REG_WINDOW{ L"^\\$(\\d+) @(\\d+) (\\d+) (\\d+) (\\d+) ([\\dabcdefABCDEF]{4}),(\\S+) (\\S+) (\\d+)$" };
@@ -1280,12 +1280,12 @@ namespace winrt::TerminalApp::implementation
     }
 
     // from controller to tmux
-    void TmuxControl::_HandleCommand(const std::wstring& result)
+    void TmuxControl::_CommandHandler(const std::wstring& result)
     {
         if (_cmdState == WAITING && _cmdQueue.size() > 0)
         {
             auto cmd = _cmdQueue.front().get();
-            cmd->HandleResult(result, *this);
+            cmd->ResultHandler(result, *this);
             _cmdQueue.pop_front();
             _cmdState = READY;
         }
