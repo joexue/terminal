@@ -215,14 +215,14 @@ namespace winrt::TerminalApp::implementation
         _NewWindow();
     }
 
-    void TmuxControl::_CharHandler(int paneId , const Control::CharSentEventArgs& args)
+    void TmuxControl::_PaneCharHandler(int paneId , const Control::CharSentEventArgs& args)
     {
         auto ch = args.Character();
         std::wstring keys(1, static_cast<wchar_t>(ch));
         _SendKey(paneId, keys);
     }
 
-    void TmuxControl::_FocusHandler(int windowId, int paneId)
+    void TmuxControl::_PaneFocusHandler(int windowId, int paneId)
     {
         if (_activePaneId == paneId)
         {
@@ -230,11 +230,17 @@ namespace winrt::TerminalApp::implementation
         }
 
         _activePaneId = paneId;
-        _activeWindowId = windowId;
+        _SelectPane(_activePaneId);
+
+        if (_activeWindowId != windowId)
+        {
+            _activeWindowId = windowId;
+            _SelectWindow(_activeWindowId);
+        }
     }
 
     // Poor version keymap
-    void TmuxControl::_KeyHandler(int paneId, const Control::KeySentEventArgs& args)
+    void TmuxControl::_PaneKeyHandler(int paneId, const Control::KeySentEventArgs& args)
     {
         auto ch = static_cast<VirtualKey>(args.VKey());
         auto keyDown = args.KeyDown();
@@ -272,6 +278,17 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
+    void TmuxControl::_PaneSizeChangedHandler(int paneId, Control::TermControl control)
+    {
+        if (_state != ATTACH_DONE)
+        {
+            return;
+        }
+        auto width = control.ViewWidth();
+        auto height = control.ViewHeight();
+        _ResizePane(paneId, width, height);
+    }
+
     void TmuxControl::_SplitPaneHorizontal(const IInspectable&, const RoutedEventArgs&)
     {
         _SplitPane(SplitDirection::Right);
@@ -287,6 +304,12 @@ namespace winrt::TerminalApp::implementation
         _SendOutput(paneId, text);
     }
 
+    void TmuxControl::_WindowRename(int windowId, const std::wstring& name)
+    {
+        auto tab = _GetTab(windowId);
+        tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ name });
+    }
+
     void TmuxControl::_WindowSizeChangedHandler(const IInspectable&, const SizeChangedEventArgs&)
     {
         auto fontSize = _core.CharacterDimensions();
@@ -295,6 +318,11 @@ namespace winrt::TerminalApp::implementation
 
         _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
         _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
+        _SetOption(std::format(L"default-size {}x{}", _width, _height));
+        for (auto& w : _attachedTabs)
+        {
+            _ResizeWindow(w.first, _width, _height);
+        }
     }
 
     void TmuxControl::_SendOutput(int paneId, const std::wstring& text)
@@ -385,16 +413,20 @@ namespace winrt::TerminalApp::implementation
         auto paneContent{ winrt::make<TerminalPaneContent> (_profile, _page._terminalSettingsCache, control) };
         auto resultPane = std::make_shared<Pane>(paneContent);
 
-        control.CharSent([this, paneId](auto& /*i*/, auto& e) {
-            return _CharHandler(paneId, e);
+        control.CharSent([this, paneId](auto&, auto& e) {
+            return _PaneCharHandler(paneId, e);
         });
 
-        control.KeySent([this, paneId](auto& /*i*/, auto& e) {
-            return _KeyHandler(paneId, e);
+        control.KeySent([this, paneId](auto&, auto& e) {
+            return _PaneKeyHandler(paneId, e);
         });
 
         control.GotFocus([this, windowId, paneId](auto, auto) {
-            return _FocusHandler(windowId, paneId);
+            return _PaneFocusHandler(windowId, paneId);
+        });
+
+        control.SizeChanged([this, paneId, control](auto, auto) {
+            return _PaneSizeChangedHandler(paneId, control);
         });
 
         _attachedPanes.insert({ paneId, {windowId, paneId, control} });
@@ -537,6 +569,9 @@ namespace winrt::TerminalApp::implementation
             case WINDOW_PANE_CHANGED:
                 _SplitPaneHandler(e.windowId, e.paneId);
                 break;
+            case WINDOW_RENAMED:
+                _WindowRename(e.windowId, e.response);
+                break;
 
             default:
                 break;
@@ -612,6 +647,8 @@ namespace winrt::TerminalApp::implementation
         }
         else if (std::regex_match(line, matches, REG_WINDOW_RENAMED))
         {
+            _event.windowId = std::stoi(matches.str(1));
+            _event.response = matches.str(2);
             _event.type = WINDOW_RENAMED;
         }
         else if (std::regex_match(line, matches, REG_UNLINKED_WINDOW_CLOSE))
@@ -1200,6 +1237,21 @@ namespace winrt::TerminalApp::implementation
         return std::wstring(L"new-window\n");
     }
 
+    void TmuxControl::_ResizePane(int paneId, int width, int height)
+    {
+        auto cmd = std::make_unique<ResizePane>();
+        cmd->paneId = paneId;
+        cmd->width = width;
+        cmd->height = height;
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+    }
+
+    std::wstring TmuxControl::ResizePane::GetCommand()
+    {
+        return std::wstring(std::format(L"resize-pane -x {} -y {} -t %{}\n", this->width, this->height, this->paneId));
+    }
+
     void TmuxControl::_ResizeWindow(int windowId, int width, int height)
     {
         auto cmd = std::make_unique<ResizeWindow>();
@@ -1213,6 +1265,32 @@ namespace winrt::TerminalApp::implementation
     std::wstring TmuxControl::ResizeWindow::GetCommand()
     {
         return std::wstring(std::format(L"resize-window -x {} -y {} -t @{}\n", this->width, this->height, this->windowId));
+    }
+
+    void TmuxControl::_SelectPane(int paneId)
+    {
+        auto cmd = std::make_unique<SelectPane>();
+        cmd->paneId = paneId;
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+    }
+
+    std::wstring TmuxControl::SelectPane::GetCommand()
+    {
+        return std::wstring(std::format(L"select-pane -t %{}\n", this->paneId));
+    }
+
+    void TmuxControl::_SelectWindow(int windowId)
+    {
+        auto cmd = std::make_unique<SelectWindow>();
+        cmd->windowId = windowId;
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+    }
+
+    std::wstring TmuxControl::SelectWindow::GetCommand()
+    {
+        return std::wstring(std::format(L"select-window -t @{}\n", this->windowId));
     }
 
     void TmuxControl::_SendKey(int paneId, const std::wstring keys)

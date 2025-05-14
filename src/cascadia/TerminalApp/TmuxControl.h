@@ -186,6 +186,8 @@ namespace winrt::TerminalApp::implementation
         public:
             std::wstring GetCommand() override;
 
+            int width;
+            int height;
             int paneId;
         };
 
@@ -311,9 +313,10 @@ namespace winrt::TerminalApp::implementation
         void _DetachKeyHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
         void _NewTabButtonHandler(const Microsoft::UI::Xaml::Controls::SplitButton& SplitButton, const Microsoft::UI::Xaml::Controls::SplitButtonClickEventArgs& args);
 
-        void _CharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
-        void _FocusHandler(int windowId, int paneId);
-        void _KeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
+        void _PaneCharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
+        void _PaneFocusHandler(int windowId, int paneId);
+        void _PaneKeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
+        void _PaneSizeChangedHandler(int paneId, winrt::Microsoft::Terminal::Control::TermControl control);
         void _SplitPaneHorizontal(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
         void _SplitPaneVertical(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
         void _TermReadyHandler(int paneId, const std::wstring& text);
@@ -327,6 +330,7 @@ namespace winrt::TerminalApp::implementation
         //std::shared_ptr<Pane> _GetActivePane();
         TerminalApp::TerminalTab _GetTab(int windowId);
         void _WindowClose(int windowId);
+        void _WindowRename(int windowId, const std::wstring& name);
         void _Output(int paneId, const std::wstring& result);
 
         bool _SyncWindowState(std::vector<TmuxWindow> windows);
@@ -346,7 +350,10 @@ namespace winrt::TerminalApp::implementation
         void _ListPanes(int windowId, int history);
         void _NewWindow();
         void _NewWindowAndPane(int windowId, const std::wstring& windowName, int paneId);
+        void _ResizePane(int paneId, int width, int height);
         void _ResizeWindow(int windowId, int width, int height);
+        void _SelectPane(int paneId);
+        void _SelectWindow(int windowId);
         void _SendKey(int paneId, const std::wstring keys);
         void _SetOption(const std::wstring& option);
         void _SplitPane(winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
