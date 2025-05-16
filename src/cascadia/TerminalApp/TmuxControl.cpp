@@ -86,23 +86,35 @@ namespace winrt::TerminalApp::implementation
     const std::wregex TmuxControl::REG_WINDOW_PANE_CHANGED{ L"^%window-pane-changed @(\\d+) %(\\d+)$" };
     const std::wregex TmuxControl::REG_WINDOW_RENAMED{ L"^%window-renamed @(\\d+) (\\S+)$" };
 
-    TmuxControl::TmuxControl(TerminalPage& page, std::shared_ptr<Pane> pane) :
+    TmuxControl::TmuxControl(TerminalPage& page) :
         _page(page)
     {
-        const auto settings{ CascadiaSettings::LoadDefaults() };
-        _profile = settings.DuplicateProfile(pane->GetProfile());
-
-        _core = pane->GetTerminalControl();
-        _core.SetTmuxControlHandlerProducer([this](auto print) {
-            //print(L"Running the TMUX control mode, press 'q' to detach: ");
-            _Print = print;
-            return [this](const auto ch) mutable {
-                return _Advance(ch);
-            };
-        });
-
         _dispatcherQueue = DispatcherQueue::GetForCurrentThread();
         return;
+    }
+
+    TmuxControl::StringHandler TmuxControl::_TmuxControlHandlerProducer(Control::TermControl control, std::function<void(std::wstring_view print)> print)
+    {
+        std::lock_guard<std::mutex> guard(_inUseMutex);
+        if (_inUse)
+        {
+            print(L"One session at same time");
+            _dispatcherQueue.TryEnqueue([control]() {
+                control.RawWriteString(L"\n");
+            });
+            return [this](const auto) {
+                return true;
+            };
+        }
+
+        _inUse = true;
+        _core = control;
+        _Print = print;
+        _Print(L"Running the TMUX control mode, press 'q' to detach: ");
+
+        return [this](const auto ch) {
+            return _Advance(ch);
+        };
     }
 
     void TmuxControl::_PrintString(const std::wstring string)
@@ -116,6 +128,14 @@ namespace winrt::TerminalApp::implementation
     void TmuxControl::_AttachSession()
     {
         _state = State::ATTACHING;
+        if (const auto terminalTab{ _page._GetFocusedTabImpl() })
+        {
+            if (const auto pane{ terminalTab->GetActivePane() })
+            {
+                const auto settings{ CascadiaSettings::LoadDefaults() };
+                _profile = settings.DuplicateProfile(pane->GetProfile());
+            }
+        }
 
         // Calculate our dimension
         auto fontSize = _core.CharacterDimensions();
@@ -168,13 +188,14 @@ namespace winrt::TerminalApp::implementation
         //_page.SizeChanged
         tmux_log_open();
 
-        _PrintString(L"Running the TMUX control mode, press 'q' to detach: \r\n");
+        //_PrintString(L"Running the TMUX control mode, press 'q' to detach: \r\n");
     }
 
     void TmuxControl::_DetachSession()
     {
         if (_state == INIT)
         {
+            _inUse = false;
             return;
         }
         _state = INIT;
@@ -195,8 +216,8 @@ namespace winrt::TerminalApp::implementation
 
         _newTabButton.Visibility(Visibility::Visible);
         _newTmuxTabButton.Visibility(Visibility::Collapsed);
-        //_core.RawWriteString(L"\n");
 
+        _inUse = false;
         tmux_log_close();
     }
 

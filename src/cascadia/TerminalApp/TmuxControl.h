@@ -16,8 +16,13 @@ namespace winrt::TerminalApp::implementation
 
     class TmuxControl
     {
+        using StringHandler = std::function<bool(const wchar_t)>;
+        using PrintHandler = std::function<void(const std::wstring_view)>;
+        using StringHandlerProducer = std::function<StringHandler(PrintHandler)>;
+
     public:
-        TmuxControl(TerminalPage& page, std::shared_ptr<Pane> pane);
+        TmuxControl(TerminalPage& page);
+        StringHandler _TmuxControlHandlerProducer(winrt::Microsoft::Terminal::Control::TermControl control, std::function<void(const std::wstring_view print)> print);
 
     private:
         static const std::wregex REG_BEGIN;
@@ -395,5 +400,7 @@ namespace winrt::TerminalApp::implementation
         int _activeWindowId{ -1 };
         bool _escapeDcs { false };
         std::function<void(const std::wstring_view string)> _Print;
+        bool _inUse { false };
+        std::mutex _inUseMutex;
     };
 }

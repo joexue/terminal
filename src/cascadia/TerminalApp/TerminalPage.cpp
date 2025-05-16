@@ -107,6 +107,8 @@ namespace winrt::TerminalApp::implementation
             }
         }
         _hostingHwnd = hwnd;
+
+        _tmuxControl = std::make_unique<TmuxControl>(*this);
         return S_OK;
     }
 
@@ -3247,7 +3249,6 @@ namespace winrt::TerminalApp::implementation
         _RegisterTerminalEvents(term);
         return term;
     }
-
     // Method Description:
     // - Creates a pane and returns a shared_ptr to it
     // - The caller should handle where the pane goes after creation,
@@ -3366,8 +3367,10 @@ namespace winrt::TerminalApp::implementation
             resultPane->ClearActive();
             original->SetActive();
         }
+        control.SetTmuxControlHandlerProducer([this, control](auto print) {
+            return _tmuxControl->_TmuxControlHandlerProducer(control, print);
+        });
 
-        _tmuxControl = std::make_unique<TmuxControl>(*this, resultPane);
         return resultPane;
     }
 
