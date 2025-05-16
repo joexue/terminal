@@ -90,105 +90,96 @@ namespace winrt::TerminalApp::implementation
         _page(page)
     {
         _dispatcherQueue = DispatcherQueue::GetForCurrentThread();
-        return;
     }
 
-    TmuxControl::StringHandler TmuxControl::_TmuxControlHandlerProducer(Control::TermControl control, std::function<void(std::wstring_view print)> print)
+    TmuxControl::StringHandler TmuxControl::TmuxControlHandlerProducer(Control::TermControl control, PrintHandler print)
     {
         std::lock_guard<std::mutex> guard(_inUseMutex);
         if (_inUse)
         {
             print(L"One session at same time");
+            // Give any input to let tmux exit.
             _dispatcherQueue.TryEnqueue([control]() {
                 control.RawWriteString(L"\n");
             });
+
+            // Empty handler, do nothing, it will exit anyway.
             return [this](const auto) {
                 return true;
             };
         }
 
         _inUse = true;
-        _core = control;
+        _control = control;
         _Print = print;
-        _Print(L"Running the TMUX control mode, press 'q' to detach: ");
+
+        _Print(L"Running the tmux control mode, press 'q' to detach:");
 
         return [this](const auto ch) {
             return _Advance(ch);
         };
     }
 
-    void TmuxControl::_PrintString(const std::wstring string)
-    {
-        auto Esc = L"\033\\";
-        auto EnterDcs = L"\033P1000p";
-        _escapeDcs = true;
-        _core.SendOutput(Esc + string + EnterDcs);
-    }
-
     void TmuxControl::_AttachSession()
     {
-        _state = State::ATTACHING;
-        if (const auto terminalTab{ _page._GetFocusedTabImpl() })
-        {
-            if (const auto pane{ terminalTab->GetActivePane() })
-            {
-                const auto settings{ CascadiaSettings::LoadDefaults() };
-                _profile = settings.DuplicateProfile(pane->GetProfile());
-            }
-        }
+        _state = ATTACHING;
 
-        // Calculate our dimension
-        auto fontSize = _core.CharacterDimensions();
-        auto x = _page.ActualWidth();
-        auto y = _page.ActualHeight();
-
-        _fontWidth = fontSize.Width;
-        _fontHeight = fontSize.Height;
-
-        // Tmux use one character to draw separator line, so we have to make the padding
-        // plus two borders equas one charcter's width or height
-        // Same reason, we have to disable the scrollbar, otherwise the local panes size
-        // will not match Tmmux's.
-        _thickness.Left = int((_fontWidth - 2 * PaneBorderSize) / 2);
-        _thickness.Right = int((_fontWidth - 2 * PaneBorderSize) / 2);
-        _thickness.Top = int((_fontHeight - 2 * PaneBorderSize) / 2);
-        _thickness.Bottom = int((_fontHeight - 2 * PaneBorderSize) / 2);
-
-        _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
-        _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
-
-        _profile.Padding(XamlThicknessToOptimalString(_thickness));
-        _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
-        _profile.Icon(L"\uF714");
+        _SetupProfile();
 
         // Intercept the control terminal's input, ignore all user input, except 'q' as detach command.
-        _detachKeyRevoker = _core.KeyDown({ this, &TmuxControl::_DetachKeyHandler });
+        _detachKeyRevoker = _control.KeyDown([this](auto, auto& e ) {
+            if (e.Key() == VirtualKey::Q)
+            {
+                tmux_log(L"   CMD: detach\n");
+                _control.RawWriteString(L"detach\n");
+            }
+            e.Handled(true);
+        });
+
+        _windowSizeChangedRevoker = _page.SizeChanged([this](auto, auto) {
+            auto fontSize = _control.CharacterDimensions();
+            auto x = _page.ActualWidth();
+            auto y = _page.ActualHeight();
+
+            _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
+            _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
+            _SetOption(std::format(L"default-size {}x{}", _width, _height));
+            for (auto& w : _attachedTabs)
+            {
+                _ResizeWindow(w.first, _width, _height);
+            }
+        });
 
         // Hide the system's splitbutton, show tmux control owns
         auto tabRow = _page.TabRow();
         auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
-        _newTabButton = tabRowImpl->NewTabButton();
-        _newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
-        _newTabButtonHandler = _newTmuxTabButton.Click({ this, &TmuxControl::_NewTabButtonHandler });
+        auto newTabButton = tabRowImpl->NewTabButton();
+        auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
 
-        _newTmuxTabButton.Background(_newTabButton.Background());
-        _newTmuxTabButton.Foreground(_newTabButton.Foreground());
+        _newTabRevoker = newTmuxTabButton.Click([this](auto, auto) {
+            _NewWindow();
+        });
 
-        _newTabButton.Visibility(Visibility::Collapsed);
-        _newTmuxTabButton.Visibility(Visibility::Visible);
+        newTmuxTabButton.Background(newTabButton.Background());
+        newTmuxTabButton.Foreground(newTabButton.Foreground());
 
-        auto flyout = _newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
+
+        auto flyout = newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
+
         auto splitHorizontal = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
-        splitHorizontal.Click({ this, &TmuxControl::_SplitPaneHorizontal });
+        _splitHorizonRevoker = splitHorizontal.Click([this](auto, auto) {
+            _SplitPane(SplitDirection::Right);
+        });
 
         auto splitVertical = flyout.Items().GetAt(1).try_as<Controls::MenuFlyoutItem>();
-        splitVertical.Click({ this, &TmuxControl::_SplitPaneVertical });
+        _splitVerticalRevoker = splitVertical.Click([this](auto, auto) {
+            _SplitPane(SplitDirection::Down);
+        });
 
-        _page.SizeChanged({this, &TmuxControl::_WindowSizeChangedHandler});
-        //_page.SizeChanged
+        newTabButton.Visibility(Visibility::Collapsed);
+        newTmuxTabButton.Visibility(Visibility::Visible);
+
         tmux_log_open();
-
-        //_PrintString(L"Running the TMUX control mode, press 'q' to detach: \r\n");
     }
 
     void TmuxControl::_DetachSession()
@@ -211,29 +202,63 @@ namespace winrt::TerminalApp::implementation
         _attachedPanes.clear();
         _attachedTabs.clear();
 
-        _core.KeyDown(_detachKeyRevoker);
-        _newTmuxTabButton.Click(_newTabButtonHandler);
 
-        _newTabButton.Visibility(Visibility::Visible);
-        _newTmuxTabButton.Visibility(Visibility::Collapsed);
+        // Revoke the event handlers
+        _control.KeyDown(_detachKeyRevoker);
+        _page.SizeChanged(_windowSizeChangedRevoker);
+
+        auto tabRow = _page.TabRow();
+        auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
+        auto newTabButton = tabRowImpl->NewTabButton();
+        auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
+        newTmuxTabButton.Click(_newTabRevoker);
+        auto flyout = newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
+        auto splitHorizontal = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
+        splitHorizontal.Click(_splitHorizonRevoker);
+        auto splitVertical = flyout.Items().GetAt(1).try_as<Controls::MenuFlyoutItem>();
+        splitVertical.Click(_splitVerticalRevoker);
+
+        newTabButton.Visibility(Visibility::Visible);
+        newTmuxTabButton.Visibility(Visibility::Collapsed);
 
         _inUse = false;
         tmux_log_close();
     }
 
-    void TmuxControl::_DetachKeyHandler(const Windows::Foundation::IInspectable& /*sender*/, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e)
+    // Tmux control has its own profile, we duplicate it from the control panel
+    void TmuxControl::_SetupProfile()
     {
-        if (e.Key() == VirtualKey::Q)
+        const auto settings{ CascadiaSettings::LoadDefaults() };
+        _profile = settings.ProfileDefaults();
+        if (const auto terminalTab{ _page._GetFocusedTabImpl() })
         {
-            tmux_log(L"   CMD: detach\n");
-            _core.RawWriteString(L"detach\n");
+            if (const auto pane{ terminalTab->GetActivePane() })
+            {
+                _profile = settings.DuplicateProfile(pane->GetProfile());
+            }
         }
-        e.Handled(true);
-    }
 
-    void TmuxControl::_NewTabButtonHandler(const Microsoft::UI::Xaml::Controls::SplitButton& /*SplitButton*/, const Microsoft::UI::Xaml::Controls::SplitButtonClickEventArgs& /*args*/)
-    {
-        _NewWindow();
+        // Calculate our dimension
+        auto fontSize = _control.CharacterDimensions();
+        auto x = _page.ActualWidth();
+        auto y = _page.ActualHeight();
+
+        _fontWidth = fontSize.Width;
+        _fontHeight = fontSize.Height;
+
+        // Tmux use one character to draw separator line, so we have to make the padding
+        // plus two borders equas one charcter's width or height
+        // Same reason, we have to disable the scrollbar, otherwise the local panes size
+        // will not match Tmmux's.
+        _thickness.Left = _thickness.Right = int((_fontWidth - 2 * PaneBorderSize) / 2);
+        _thickness.Top = _thickness.Bottom = int((_fontHeight - 2 * PaneBorderSize) / 2);
+
+        _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
+        _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
+
+        _profile.Padding(XamlThicknessToOptimalString(_thickness));
+        _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
+        _profile.Icon(L"\uF714");
     }
 
     void TmuxControl::_PaneCharHandler(int paneId , const Control::CharSentEventArgs& args)
@@ -301,7 +326,7 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_PaneSizeChangedHandler(int paneId, Control::TermControl control)
     {
-        if (_state != ATTACH_DONE)
+        if (_state != ATTACHED)
         {
             return;
         }
@@ -310,40 +335,10 @@ namespace winrt::TerminalApp::implementation
         _ResizePane(paneId, width, height);
     }
 
-    void TmuxControl::_SplitPaneHorizontal(const IInspectable&, const RoutedEventArgs&)
-    {
-        _SplitPane(SplitDirection::Right);
-    }
-
-    void TmuxControl::_SplitPaneVertical(const IInspectable&, const RoutedEventArgs&)
-    {
-        _SplitPane(SplitDirection::Down);
-    }
-
-    void TmuxControl::_TermReadyHandler(int paneId, const std::wstring& text)
-    {
-        _SendOutput(paneId, text);
-    }
-
-    void TmuxControl::_WindowRename(int windowId, const std::wstring& name)
+    void TmuxControl::_RenameWindow(int windowId, const std::wstring& name)
     {
         auto tab = _GetTab(windowId);
         tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ name });
-    }
-
-    void TmuxControl::_WindowSizeChangedHandler(const IInspectable&, const SizeChangedEventArgs&)
-    {
-        auto fontSize = _core.CharacterDimensions();
-        auto x = _page.ActualWidth();
-        auto y = _page.ActualHeight();
-
-        _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
-        _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
-        _SetOption(std::format(L"default-size {}x{}", _width, _height));
-        for (auto& w : _attachedTabs)
-        {
-            _ResizeWindow(w.first, _width, _height);
-        }
     }
 
     void TmuxControl::_SendOutput(int paneId, const std::wstring& text)
@@ -371,7 +366,7 @@ namespace winrt::TerminalApp::implementation
         {
             std::wstring res(text);
             c.Initialized([this, paneId, res](auto& /*i*/, auto& /*e*/) {
-                return _TermReadyHandler(paneId, res);
+                _SendOutput(paneId, res);
             });
         }
     }
@@ -474,7 +469,7 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_Output(int paneId, const std::wstring& result)
     {
-        if (_state != ATTACH_DONE)
+        if (_state != ATTACHED)
         {
             return;
         }
@@ -482,7 +477,7 @@ namespace winrt::TerminalApp::implementation
         _SendOutput(paneId, result);
     }
 
-    void TmuxControl::_WindowClose(int windowId)
+    void TmuxControl::_CloseWindow(int windowId)
     {
         auto search = _attachedTabs.find(windowId);
         if (search == _attachedTabs.end())
@@ -556,14 +551,7 @@ namespace winrt::TerminalApp::implementation
                 _AttachSession();
                 break;
             case DETACH:
-                if (_escapeDcs)
-                {
-                    _escapeDcs = false;
-                }
-                else
-                {
-                    _DetachSession();
-                }
+                _DetachSession();
                 break;
             case LAYOUT_CHANGED:
                 _DiscoverPanes(_sessionId, e.windowId, false);
@@ -585,13 +573,13 @@ namespace winrt::TerminalApp::implementation
                 break;
             case WINDOW_CLOSE:
             case UNLINKED_WINDOW_CLOSE:
-                _WindowClose(e.windowId);
+                _CloseWindow(e.windowId);
                 break;
             case WINDOW_PANE_CHANGED:
                 _SplitPaneHandler(e.windowId, e.paneId);
                 break;
             case WINDOW_RENAMED:
-                _WindowRename(e.windowId, e.response);
+                _RenameWindow(e.windowId, e.response);
                 break;
 
             default:
@@ -975,7 +963,7 @@ namespace winrt::TerminalApp::implementation
             // Not done, requeue it, this is because capture may requeue in case the pane is not ready
             tmux._AttachDone();
         } else {
-            tmux._state = ATTACH_DONE;
+            tmux._state = ATTACHED;
         }
 
         return true;
@@ -1010,7 +998,7 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_DiscoverPanes(int sessionId, int windowId, bool addPane)
     {
-        if (_state != ATTACH_DONE)
+        if (_state != ATTACHED)
         {
             return;
         }
@@ -1260,6 +1248,10 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_ResizePane(int paneId, int width, int height)
     {
+        if (width == 0 || height == 0)
+        {
+            return;
+        }
         auto cmd = std::make_unique<ResizePane>();
         cmd->paneId = paneId;
         cmd->width = width;
@@ -1402,21 +1394,14 @@ namespace winrt::TerminalApp::implementation
             return;
         }
 
-        _cmdState = WAITING;
-
-        while (_cmdQueue.size() > 0)
+        if (_cmdQueue.size() > 0)
         {
+            _cmdState = WAITING;
+
             auto cmd = _cmdQueue.front().get();
             auto cmdStr = cmd->GetCommand();
-            if (cmdStr.empty())
-            {
-                _cmdQueue.pop_front();
-                continue;
-            }
             tmux_log(L"   CMD: " + cmdStr);
-            _core.RawWriteString(cmdStr);
-            return;
+            _control.RawWriteString(cmdStr);
         }
-        _cmdState = READY;
     }
 }

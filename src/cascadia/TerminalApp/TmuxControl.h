@@ -6,7 +6,6 @@
 #include <regex>
 #include <vector>
 #include <unordered_map>
-#include "TerminalPage.g.h"
 
 #include "Pane.h"
 
@@ -22,7 +21,7 @@ namespace winrt::TerminalApp::implementation
 
     public:
         TmuxControl(TerminalPage& page);
-        StringHandler _TmuxControlHandlerProducer(winrt::Microsoft::Terminal::Control::TermControl control, std::function<void(const std::wstring_view print)> print);
+        StringHandler TmuxControlHandlerProducer(winrt::Microsoft::Terminal::Control::TermControl control, PrintHandler print);
 
     private:
         static const std::wregex REG_BEGIN;
@@ -60,7 +59,7 @@ namespace winrt::TerminalApp::implementation
         {
             INIT,
             ATTACHING,
-            ATTACH_DONE,
+            ATTACHED,
         } _state{ INIT };
 
         enum CommandState : int
@@ -227,7 +226,6 @@ namespace winrt::TerminalApp::implementation
             std::wstring GetCommand() override;
 
             int paneId;
-            //std::vector<wchar_t> keys;
             std::wstring keys;
             wchar_t key;
         };
@@ -298,7 +296,6 @@ namespace winrt::TerminalApp::implementation
         struct SplittingPane
         {
             int paneId;
-            //std::shared_ptr<Pane> pane;
             winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction;
         };
 
@@ -306,36 +303,26 @@ namespace winrt::TerminalApp::implementation
         {
             int windowId;
             int paneId;
-            //std::shared_ptr<Pane> pane;
             winrt::Microsoft::Terminal::Control::TermControl control;
         };
 
         // Private methods
-        void _PrintString(const std::wstring string);
         void _AttachSession();
         void _DetachSession();
 
-        void _DetachKeyHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
-        void _NewTabButtonHandler(const Microsoft::UI::Xaml::Controls::SplitButton& SplitButton, const Microsoft::UI::Xaml::Controls::SplitButtonClickEventArgs& args);
-
+        void _SetupProfile();
         void _PaneCharHandler(int paneId , const winrt::Microsoft::Terminal::Control::CharSentEventArgs& args);
         void _PaneFocusHandler(int windowId, int paneId);
         void _PaneKeyHandler(int paneId, const winrt::Microsoft::Terminal::Control::KeySentEventArgs& args);
         void _PaneSizeChangedHandler(int paneId, winrt::Microsoft::Terminal::Control::TermControl control);
-        void _SplitPaneHorizontal(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
-        void _SplitPaneVertical(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& args);
-        void _TermReadyHandler(int paneId, const std::wstring& text);
-        void _WindowSizeChangedHandler(const Windows::Foundation::IInspectable& sender, const winrt::Windows::UI::Xaml::SizeChangedEventArgs& args);
 
-        //void _UpdateAttachedPane(int windowId);
         float _ComputeSplitSize(int newSize, int originSize, winrt::Microsoft::Terminal::Settings::Model::SplitDirection direction);
         void _SendOutput(int paneId, const std::wstring& text);
         std::wstring& _DecodeOutput(const std::wstring& in, std::wstring& out);
         std::shared_ptr<Pane> _NewPane(int windowId, int paneId);
-        //std::shared_ptr<Pane> _GetActivePane();
         TerminalApp::TerminalTab _GetTab(int windowId);
-        void _WindowClose(int windowId);
-        void _WindowRename(int windowId, const std::wstring& name);
+        void _CloseWindow(int windowId);
+        void _RenameWindow(int windowId, const std::wstring& name);
         void _Output(int paneId, const std::wstring& result);
 
         bool _SyncWindowState(std::vector<TmuxWindow> windows);
@@ -371,13 +358,14 @@ namespace winrt::TerminalApp::implementation
         // Private variables
         TerminalPage& _page;
         winrt::Microsoft::Terminal::Settings::Model::Profile _profile;
-        winrt::Microsoft::Terminal::Control::TermControl _core { nullptr };
+        winrt::Microsoft::Terminal::Control::TermControl _control { nullptr };
         winrt::Windows::System::DispatcherQueue _dispatcherQueue{ nullptr };
-        winrt::event_token _detachKeyRevoker;
-        winrt::event_token _newTabButtonHandler;
 
-        Microsoft::UI::Xaml::Controls::SplitButton _newTabButton{ nullptr };
-        Microsoft::UI::Xaml::Controls::SplitButton _newTmuxTabButton{ nullptr };
+        winrt::event_token _detachKeyRevoker;
+        winrt::event_token _windowSizeChangedRevoker;
+        winrt::event_token _newTabRevoker;
+        winrt::event_token _splitHorizonRevoker;
+        winrt::event_token _splitVerticalRevoker;
 
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
@@ -398,7 +386,6 @@ namespace winrt::TerminalApp::implementation
         SplittingPane _splittingPane {-1, winrt::Microsoft::Terminal::Settings::Model::SplitDirection::Left};
         int _activePaneId{ -1 };
         int _activeWindowId{ -1 };
-        bool _escapeDcs { false };
         std::function<void(const std::wstring_view string)> _Print;
         bool _inUse { false };
         std::mutex _inUseMutex;

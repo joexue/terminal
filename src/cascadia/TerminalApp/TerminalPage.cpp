@@ -3368,7 +3368,7 @@ namespace winrt::TerminalApp::implementation
             original->SetActive();
         }
         control.SetTmuxControlHandlerProducer([this, control](auto print) {
-            return _tmuxControl->_TmuxControlHandlerProducer(control, print);
+            return _tmuxControl->TmuxControlHandlerProducer(control, print);
         });
 
         return resultPane;
