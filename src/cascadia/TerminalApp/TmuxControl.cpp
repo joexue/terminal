@@ -90,9 +90,30 @@ namespace winrt::TerminalApp::implementation
         _page(page)
     {
         _dispatcherQueue = DispatcherQueue::GetForCurrentThread();
+
+        auto tabRow = _page.TabRow();
+        auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
+        auto newTabButton = tabRowImpl->NewTabButton();
+        auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
+
+        newTmuxTabButton.Click([this](auto, auto) {
+            _NewWindow();
+        });
+
+        auto flyout = newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
+
+        auto splitHorizontal = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
+        splitHorizontal.Click([this](auto, auto) {
+            _SplitPane(SplitDirection::Right);
+        });
+
+        auto splitVertical = flyout.Items().GetAt(1).try_as<Controls::MenuFlyoutItem>();
+        splitVertical.Click([this](auto, auto) {
+            _SplitPane(SplitDirection::Down);
+        });
     }
 
-    TmuxControl::StringHandler TmuxControl::TmuxControlHandlerProducer(Control::TermControl control, PrintHandler print)
+    TmuxControl::StringHandler TmuxControl::TmuxControlHandlerProducer(const Control::TermControl control, const PrintHandler print)
     {
         std::lock_guard<std::mutex> guard(_inUseMutex);
         if (_inUse)
@@ -127,7 +148,7 @@ namespace winrt::TerminalApp::implementation
         _SetupProfile();
 
         // Intercept the control terminal's input, ignore all user input, except 'q' as detach command.
-        _detachKeyRevoker = _control.KeyDown([this](auto, auto& e ) {
+        _detachKeyDownRevoker = _control.KeyDown([this](auto, auto& e ) {
             if (e.Key() == VirtualKey::Q)
             {
                 tmux_log(L"   CMD: detach\n");
@@ -141,40 +162,23 @@ namespace winrt::TerminalApp::implementation
             auto x = _page.ActualWidth();
             auto y = _page.ActualHeight();
 
-            _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
-            _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
-            _SetOption(std::format(L"default-size {}x{}", _width, _height));
-            for (auto& w : _attachedTabs)
+            _terminalWidth = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
+            _terminalHeight = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
+            _SetOption(std::format(L"default-size {}x{}", _terminalWidth, _terminalHeight));
+            for (auto& w : _attachedWindows)
             {
-                _ResizeWindow(w.first, _width, _height);
+                _ResizeWindow(w.first, _terminalWidth, _terminalHeight);
             }
         });
 
-        // Hide the system's splitbutton, show tmux control owns
+        // Hide the original terminal's splitbutton, show tmux control owns
         auto tabRow = _page.TabRow();
         auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
         auto newTabButton = tabRowImpl->NewTabButton();
         auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
 
-        _newTabRevoker = newTmuxTabButton.Click([this](auto, auto) {
-            _NewWindow();
-        });
-
         newTmuxTabButton.Background(newTabButton.Background());
         newTmuxTabButton.Foreground(newTabButton.Foreground());
-
-
-        auto flyout = newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
-
-        auto splitHorizontal = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
-        _splitHorizonRevoker = splitHorizontal.Click([this](auto, auto) {
-            _SplitPane(SplitDirection::Right);
-        });
-
-        auto splitVertical = flyout.Items().GetAt(1).try_as<Controls::MenuFlyoutItem>();
-        _splitVerticalRevoker = splitVertical.Click([this](auto, auto) {
-            _SplitPane(SplitDirection::Down);
-        });
 
         newTabButton.Visibility(Visibility::Collapsed);
         newTmuxTabButton.Visibility(Visibility::Visible);
@@ -195,28 +199,22 @@ namespace winrt::TerminalApp::implementation
         _cmdState = READY;
 
         std::vector<winrt::TerminalApp::TabBase> tabs;
-        for (auto& t : _attachedTabs)
+        for (auto& w : _attachedWindows)
         {
-            _page._RemoveTab(t.second.first);
+            _page._RemoveTab(w.second);
         }
         _attachedPanes.clear();
-        _attachedTabs.clear();
+        _attachedWindows.clear();
 
 
         // Revoke the event handlers
-        _control.KeyDown(_detachKeyRevoker);
+        _control.KeyDown(_detachKeyDownRevoker);
         _page.SizeChanged(_windowSizeChangedRevoker);
 
         auto tabRow = _page.TabRow();
         auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
         auto newTabButton = tabRowImpl->NewTabButton();
         auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
-        newTmuxTabButton.Click(_newTabRevoker);
-        auto flyout = newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
-        auto splitHorizontal = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
-        splitHorizontal.Click(_splitHorizonRevoker);
-        auto splitVertical = flyout.Items().GetAt(1).try_as<Controls::MenuFlyoutItem>();
-        splitVertical.Click(_splitVerticalRevoker);
 
         newTabButton.Visibility(Visibility::Visible);
         newTmuxTabButton.Visibility(Visibility::Collapsed);
@@ -253,110 +251,93 @@ namespace winrt::TerminalApp::implementation
         _thickness.Left = _thickness.Right = int((_fontWidth - 2 * PaneBorderSize) / 2);
         _thickness.Top = _thickness.Bottom = int((_fontHeight - 2 * PaneBorderSize) / 2);
 
-        _width = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
-        _height = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
+        _terminalWidth = (int)((x - _thickness.Left - _thickness.Right) / fontSize.Width);
+        _terminalHeight = (int)((y - _thickness.Top - _thickness.Bottom) / fontSize.Height);
 
         _profile.Padding(XamlThicknessToOptimalString(_thickness));
         _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
         _profile.Icon(L"\uF714");
     }
 
-    void TmuxControl::_PaneCharHandler(int paneId , const Control::CharSentEventArgs& args)
+    float TmuxControl::_ComputeSplitSize(int newSize, int originSize, SplitDirection direction) const
     {
-        auto ch = args.Character();
-        std::wstring keys(1, static_cast<wchar_t>(ch));
-        _SendKey(paneId, keys);
+        float fontSize = _fontWidth;
+        double margin1, margin2;
+        if (direction == SplitDirection::Left || direction == SplitDirection::Right)
+        {
+            margin2 = _thickness.Left + _thickness.Right;
+            margin1 = margin2 + PaneBorderSize;
+        }
+        else
+        {
+            fontSize = _fontHeight;
+            margin2 = _thickness.Top + _thickness.Bottom;
+            margin1 = margin2 + PaneBorderSize;
+        }
+
+        auto f = round(newSize * fontSize + margin1) / round(originSize * fontSize + margin2);
+
+        return (float)(1.0f - f);
     }
 
-    void TmuxControl::_PaneFocusHandler(int windowId, int paneId)
+    TerminalApp::TerminalTab TmuxControl::_GetTab(int windowId) const
     {
-        if (_activePaneId == paneId)
+        auto search = _attachedWindows.find(windowId);
+        if (search == _attachedWindows.end())
         {
-            return;
+            return nullptr;
         }
 
-        _activePaneId = paneId;
-        _SelectPane(_activePaneId);
-
-        if (_activeWindowId != windowId)
-        {
-            _activeWindowId = windowId;
-            _SelectWindow(_activeWindowId);
-        }
-    }
-
-    // Poor version keymap
-    void TmuxControl::_PaneKeyHandler(int paneId, const Control::KeySentEventArgs& args)
-    {
-        auto ch = static_cast<VirtualKey>(args.VKey());
-        auto keyDown = args.KeyDown();
-        std::wstring out = L"";
-
-        if (!keyDown)
-        {
-            return;
-        }
-
-        if (ch == VirtualKey::Up)
-        {
-            out = L"\033[A";
-        }
-        else if (ch == VirtualKey::Down)
-        {
-            out = L"\033[B";
-        }
-        else if (ch == VirtualKey::Right)
-        {
-            out = L"\033[C";
-        }
-        else if (ch == VirtualKey::Left)
-        {
-            out = L"\033[D";
-        }
-        else if (ch == VirtualKey::Tab)
-        {
-            out = L"\t";
-        }
-
-        if (out.size() > 0)
-        {
-            _SendKey(paneId, out);
-        }
-    }
-
-    void TmuxControl::_PaneSizeChangedHandler(int paneId, Control::TermControl control)
-    {
-        if (_state != ATTACHED)
-        {
-            return;
-        }
-        auto width = control.ViewWidth();
-        auto height = control.ViewHeight();
-        _ResizePane(paneId, width, height);
-    }
-
-    void TmuxControl::_RenameWindow(int windowId, const std::wstring& name)
-    {
-        auto tab = _GetTab(windowId);
-        tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ name });
+        return search->second;
     }
 
     void TmuxControl::_SendOutput(int paneId, const std::wstring& text)
     {
         auto search = _attachedPanes.find(paneId);
+        // The pane is not ready it, put int backlog for now
         if (search == _attachedPanes.end())
         {
             _outputBacklog.insert_or_assign(paneId, text);
             return;
         }
 
-        //auto p = search->second.pane;
-        //auto c = p->GetTerminalControl();
-        auto c = search->second.control;
+        auto DecodeOutput = [](const std::wstring& in, std::wstring& out) {
+            auto it = in.begin();
+            while (it != in.end())
+            {
+                wchar_t c = *it;
+                if (c == L'\\')
+                {
+                    ++it;
+                    c = 0;
+                    for (int i = 0; i < 3 && it != in.end(); ++i, ++it)
+                    {
+                        if (*it < L'0' || *it > L'7')
+                        {
+                            c = L'?';
+                            break;
+                        }
+                        c = c * 8 + (*it - L'0');
+                    }
+                    out.push_back(c);
+                    continue;
+                }
+
+                if (c == L'\n')
+                {
+                    out.push_back(L'\r');
+                }
+
+                out.push_back(c);
+                ++it;
+            }
+        };
+
+        auto& c = search->second.control;
 
         if (c.ViewHeight() != 0) {
             std::wstring out = L"";
-            _DecodeOutput(text, out);
+            DecodeOutput(text, out);
 #if 0
             out += std::format(L" {}x{}", c.ViewWidth(), c.ViewHeight());
 #endif
@@ -371,102 +352,6 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
-    float TmuxControl::_ComputeSplitSize(int newSize, int originSize, SplitDirection direction)
-    {
-        float fontSize = _fontWidth;
-        double amend1, amend2;
-        switch(direction)
-        {
-            case SplitDirection::Left:
-                amend1 = _thickness.Left + _thickness.Right + PaneBorderSize;
-                amend2 = _thickness.Left + _thickness.Right;
-                break;
-            case SplitDirection::Right:
-                amend1 = _thickness.Left + _thickness.Right + PaneBorderSize;
-                amend2 = _thickness.Left + _thickness.Right;
-                break;
-            case SplitDirection::Up:
-                fontSize = _fontHeight;
-                amend1 = _thickness.Top + _thickness.Bottom + PaneBorderSize;
-                amend2 = _thickness.Top + _thickness.Bottom;
-                break;
-            case SplitDirection::Down:
-                fontSize = _fontHeight;
-                amend1 = _thickness.Top + _thickness.Bottom + PaneBorderSize;
-                amend2 = _thickness.Top + _thickness.Bottom;
-                break;
-            default:
-                break;
-        }
-
-        auto f = round(newSize  * fontSize + amend1) / round(originSize  * fontSize + amend2);
-        if (direction == SplitDirection::Left || direction == SplitDirection::Up)
-        {
-            f = 1 - f;
-        }
-
-        return (float)f;
-    }
-
-    TerminalApp::TerminalTab TmuxControl::_GetTab(int windowId)
-    {
-        auto search = _attachedTabs.find(windowId);
-        if (search == _attachedTabs.end())
-        {
-            return nullptr;
-        }
-
-        return search->second.first;
-    }
-
-    std::shared_ptr<Pane> TmuxControl::_NewPane(int windowId, int paneId)
-    {
-        auto connection = TerminalConnection::DumyConnection{};
-
-        auto controlSettings = TerminalSettings::CreateWithProfile(_page._settings, _profile, *_page._bindings);
-        const auto control = _page._CreateNewControlAndContent(controlSettings, connection);
-
-        auto paneContent{ winrt::make<TerminalPaneContent> (_profile, _page._terminalSettingsCache, control) };
-        auto resultPane = std::make_shared<Pane>(paneContent);
-
-        control.CharSent([this, paneId](auto&, auto& e) {
-            return _PaneCharHandler(paneId, e);
-        });
-
-        control.KeySent([this, paneId](auto&, auto& e) {
-            return _PaneKeyHandler(paneId, e);
-        });
-
-        control.GotFocus([this, windowId, paneId](auto, auto) {
-            return _PaneFocusHandler(windowId, paneId);
-        });
-
-        control.SizeChanged([this, paneId, control](auto, auto) {
-            return _PaneSizeChangedHandler(paneId, control);
-        });
-
-        _attachedPanes.insert({ paneId, {windowId, paneId, control} });
-        return resultPane;
-    }
-
-    void TmuxControl::_NewWindowAndPane(int windowId, const std::wstring& windowName, int paneId)
-    {
-        auto rootPane = _NewPane(windowId, paneId);
-        auto tab = _page._CreateNewTabFromPane(rootPane);
-        tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ windowName});
-        _attachedTabs.insert({windowId, {tab, rootPane}});
-
-        // Check if we have output before we are ready
-        auto search = _outputBacklog.find(paneId);
-        if (search == _outputBacklog.end())
-        {
-            return;
-        }
-
-        auto result = search->second;
-        _SendOutput(paneId, result);
-    }
-
     void TmuxControl::_Output(int paneId, const std::wstring& result)
     {
         if (_state != ATTACHED)
@@ -479,17 +364,17 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_CloseWindow(int windowId)
     {
-        auto search = _attachedTabs.find(windowId);
-        if (search == _attachedTabs.end())
+        auto search = _attachedWindows.find(windowId);
+        if (search == _attachedWindows.end())
         {
             return;
         }
 
-        auto t = search->second;
-        _attachedTabs.erase(search);
+        TerminalApp::TerminalTab t = search->second;
+        _attachedWindows.erase(search);
 
-        t.first.Shutdown();
-        // Remove all attached panes
+        t.Shutdown();
+        // Remove all attached panes in this window
         for (auto p = _attachedPanes.begin(); p != _attachedPanes.end();)
         {
             if (p->second.windowId == windowId)
@@ -502,10 +387,35 @@ namespace winrt::TerminalApp::implementation
             }
         }
 
-        _page._RemoveTab(t.first);
+        _page._RemoveTab(t);
     }
 
-    void TmuxControl::_SplitPaneHandler(int windowId, int newPaneId)
+    void TmuxControl::_RenameWindow(int windowId, const std::wstring& name)
+    {
+        auto tab = _GetTab(windowId);
+        tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ name });
+    }
+
+    void TmuxControl::_NewWindowFinalize(int windowId, int paneId, const std::wstring& windowName)
+    {
+        auto rootPane = _NewPane(windowId, paneId);
+        auto tab = _page._CreateNewTabFromPane(rootPane);
+        tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ windowName});
+        _attachedWindows.insert({windowId, tab});
+
+        // Check if we have output before we are ready
+        auto search = _outputBacklog.find(paneId);
+        if (search == _outputBacklog.end())
+        {
+            return;
+        }
+
+        auto& result = search->second;
+        _SendOutput(paneId, result);
+        _outputBacklog.erase(search);
+    }
+
+    void TmuxControl::_SplitPaneFinalize(int windowId, int newPaneId)
     {
         // Only handle the split pane
         auto search = _attachedPanes.find(newPaneId);
@@ -514,7 +424,7 @@ namespace winrt::TerminalApp::implementation
             return;
         }
 
-        auto direction = _splittingPane.direction;
+        auto direction = _splittingPane.second;
         auto tab = _GetTab(windowId);
         auto activePane = tab.try_as<TerminalTab>()->GetActivePane();
 
@@ -540,7 +450,281 @@ namespace winrt::TerminalApp::implementation
         _attachedPanes.insert({_activePaneId, {windowId, _activePaneId, origin->GetTerminalControl()}});
 
         newGuy->GetTerminalControl().Focus(FocusState::Programmatic);
-        _splittingPane.paneId = -1;
+        _splittingPane.first = -1;
+    }
+
+    std::shared_ptr<Pane> TmuxControl::_NewPane(int windowId, int paneId)
+    {
+        auto connection = TerminalConnection::DumyConnection{};
+        auto controlSettings = TerminalSettings::CreateWithProfile(_page._settings, _profile, *_page._bindings);
+        const auto control = _page._CreateNewControlAndContent(controlSettings, connection);
+
+        auto paneContent{ winrt::make<TerminalPaneContent> (_profile, _page._terminalSettingsCache, control) };
+        auto pane = std::make_shared<Pane>(paneContent);
+
+        control.CharSent([this, paneId](auto, auto& args) {
+            auto ch = args.Character();
+            std::wstring keys(1, static_cast<wchar_t>(ch));
+            _SendKey(paneId, keys);
+        });
+
+        control.KeySent([this, paneId](auto, auto& args) {
+            auto keyDown = args.KeyDown();
+            if (!keyDown)
+            {
+                return;
+            }
+
+            auto ch = static_cast<VirtualKey>(args.VKey());
+            std::wstring out = L"";
+            if (ch == VirtualKey::Up)
+            {
+                out = L"\033[A";
+            }
+            else if (ch == VirtualKey::Down)
+            {
+                out = L"\033[B";
+            }
+            else if (ch == VirtualKey::Right)
+            {
+                out = L"\033[C";
+            }
+            else if (ch == VirtualKey::Left)
+            {
+                out = L"\033[D";
+            }
+            else if (ch == VirtualKey::Tab)
+            {
+                out = L"\t";
+            }
+
+            if (out.size() > 0)
+            {
+                _SendKey(paneId, out);
+            }
+        });
+
+        control.GotFocus([this, windowId, paneId](auto, auto) {
+            if (_activePaneId == paneId)
+            {
+                return;
+            }
+
+            _activePaneId = paneId;
+            _SelectPane(_activePaneId);
+
+            if (_activeWindowId != windowId)
+            {
+                _activeWindowId = windowId;
+                _SelectWindow(_activeWindowId);
+            }
+        });
+
+        control.SizeChanged([this, paneId, control](auto, const Xaml::SizeChangedEventArgs& args) {
+            if (_state != ATTACHED)
+            {
+                return;
+            }
+            // Ignore the new created
+            if (args.PreviousSize().Width == 0 || args.PreviousSize().Height == 0)
+            {
+                return;
+            }
+
+            auto width = (int)((args.NewSize().Width - 2 * _thickness.Left) / _fontWidth);
+            auto height = (int)((args.NewSize().Height - 2 * _thickness.Top) / _fontHeight);
+            _ResizePane(paneId, width, height);
+        });
+
+        _attachedPanes.insert({ paneId, {windowId, paneId, control} });
+
+        return pane;
+    }
+
+    bool TmuxControl::_SyncPaneState(std::vector<TmuxPane> panes, int history)
+    {
+        for (auto& p : panes)
+        {
+            auto search = _attachedPanes.find(p.paneId);
+            if (search == _attachedPanes.end())
+            {
+                continue;
+            }
+
+            _CapturePane(p.paneId, p.cursorX, p.cursorY, history);
+        }
+
+        return true;
+    }
+
+    bool TmuxControl::_SyncWindowState(std::vector<TmuxWindow> windows)
+    {
+        for (auto& w : windows)
+        {
+            auto direction = SplitDirection::Left;
+            std::shared_ptr<Pane> rootPane{ nullptr };
+            std::unordered_map<int, std::shared_ptr<Pane>> attachedPanes;
+            for (auto& l : w.layout)
+            {
+                int rootSize;
+                auto& panes = l.panes;
+                auto& p = panes.at(0);
+                switch (l.type)
+                {
+                    case SIGNLE_PANE:
+                        {
+                            rootPane = _NewPane(w.windowId, p.id);
+                            continue;
+                        }
+                    case SPLIT_HORIZONTAL:
+                        direction = SplitDirection::Left;
+                        rootSize = p.width;
+                        break;
+                    case SPLIT_VERTICAL:
+                        direction = SplitDirection::Up;
+                        rootSize = p.height;
+                        break;
+                }
+
+                auto search = attachedPanes.find(p.id);
+                std::shared_ptr<Pane> targetPane{ nullptr };
+                int targetPaneId = p.id;
+                if (search == attachedPanes.end())
+                {
+                    targetPane = _NewPane(w.windowId, p.id);
+                    if (rootPane == nullptr) {
+                        rootPane = targetPane;
+                    }
+                    attachedPanes.insert({p.id, targetPane});
+                }
+                else
+                {
+                    targetPane = search->second;
+                }
+
+                for (size_t i = 1; i < panes.size(); i++)
+                {
+                    // Create and attach
+                    auto& p = panes.at(i);
+
+                    auto pane = _NewPane(w.windowId, p.id);
+                    attachedPanes.insert({p.id, pane});
+
+                    float splitSize;
+                    if (direction == SplitDirection::Left)
+                    {
+                        auto paneSize = panes.at(i).width;
+                        splitSize = _ComputeSplitSize(paneSize, rootSize, direction);
+                        rootSize -= (paneSize + 1);
+                    }
+                    else
+                    {
+                        auto paneSize = panes.at(i).height;
+                        splitSize = _ComputeSplitSize(paneSize, rootSize, direction);
+                        rootSize -= (paneSize + 1);
+                    }
+                    targetPane = targetPane->AttachPane(pane, direction, splitSize);
+                    attachedPanes.erase(targetPaneId);
+                    attachedPanes.insert({targetPaneId, targetPane});
+                }
+            }
+            auto tab = _page._CreateNewTabFromPane(rootPane);
+            _attachedWindows.insert({w.windowId, tab});
+
+            tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ w.name });
+            _ListPanes(w.windowId, w.history);
+        }
+        return true;
+    }
+
+    std::vector<TmuxControl::TmuxWindowLayout> TmuxControl::_ParseTmuxWindowLayout(std::wstring& layout)
+    {
+        std::wregex RegPane { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+),(\\d+)" };
+
+        std::wregex RegSplitHPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\{" };
+        std::wregex RegSplitVPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\[" };
+        std::wregex RegSplitPop { L"^[\\} | \\]]" };
+        std::vector<TmuxControl::TmuxWindowLayout> result;
+
+        auto _ExtractPane = [&](std::wsmatch& matches, TmuxPaneLayout& p) {
+            p.width = std::stoi(matches.str(1));
+            p.height = std::stoi(matches.str(2));
+            p.left = std::stoi(matches.str(3));
+            p.top = std::stoi(matches.str(4));
+            if (matches.size() > 5)
+            {
+                p.id = std::stoi(matches.str(5));
+            }
+        };
+
+        auto _ParseNested = [&](std::wstring) {
+            std::wsmatch matches;
+            size_t parse_len = 0;
+            TmuxWindowLayout l;
+
+            std::vector<TmuxWindowLayout> stack;
+
+            while (layout.length() > 0) {
+                if (std::regex_search(layout, matches, RegSplitHPush)) {
+                    TmuxPaneLayout p;
+                    _ExtractPane(matches, p);
+                    l.panes.push_back(p);
+                    stack.push_back(l);
+
+                    l.type = SPLIT_HORIZONTAL;
+                    l.panes.clear();
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, matches, RegSplitVPush)) {
+                    TmuxPaneLayout p;
+                    _ExtractPane(matches, p);
+                    l.panes.push_back(p);
+                    stack.push_back(l);
+
+                    // New one
+                    l.type = SPLIT_VERTICAL;
+                    l.panes.clear();
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, matches, RegPane)) {
+                    TmuxPaneLayout p;
+                    _ExtractPane(matches, p);
+                    l.panes.push_back(p);
+                } else if (std::regex_search(layout, matches, RegSplitPop)) {
+                    auto id = l.panes.back().id;
+                    l.panes.pop_back();
+                    l.panes.front().id = id;
+                    result.insert(result.begin(), l);
+
+                    l = stack.back();
+                    l.panes.back().id = id;
+                    stack.pop_back();
+                } else {
+                    assert(0);
+                }
+                parse_len = matches.length(0);
+                layout = layout.substr(parse_len);
+            }
+
+            return result;
+        };
+
+        // Single pane mode
+        std::wsmatch matches;
+        if (std::regex_match(layout, matches, RegPane)) {
+            TmuxPaneLayout p;
+            _ExtractPane(matches, p);
+
+            TmuxWindowLayout l;
+            l.type = SIGNLE_PANE;
+            l.panes.push_back(p);
+
+            result.push_back(l);
+            return result;
+        }
+
+        // Nested mode
+        _ParseNested(layout);
+
+        return result;
     }
 
     void TmuxControl::_EventHandler(const Event& e)
@@ -565,7 +749,7 @@ namespace winrt::TerminalApp::implementation
                 break;
             case SESSION_CHANGED:
                 _sessionId = e.sessionId;
-                _SetOption(std::format(L"default-size {}x{}", _width, _height));
+                _SetOption(std::format(L"default-size {}x{}", _terminalWidth, _terminalHeight));
                 _DiscoverWindows(_sessionId);
                 break;
             case WINDOW_ADD:
@@ -576,7 +760,7 @@ namespace winrt::TerminalApp::implementation
                 _CloseWindow(e.windowId);
                 break;
             case WINDOW_PANE_CHANGED:
-                _SplitPaneHandler(e.windowId, e.paneId);
+                _SplitPaneFinalize(e.windowId, e.paneId);
                 break;
             case WINDOW_RENAMED:
                 _RenameWindow(e.windowId, e.response);
@@ -586,7 +770,7 @@ namespace winrt::TerminalApp::implementation
                 break;
         }
 
-        // We are done, give the command in queue a chance to run
+        // We are done, give the command in the queue a chance to run
         _ScheduleCommand();
     }
 
@@ -595,7 +779,7 @@ namespace winrt::TerminalApp::implementation
         tmux_log(L"OUTPUT: " + line + L'\n');
         std::wsmatch matches;
 
-        // tmux generic rules
+        // Tmux generic rules
         if (std::regex_match(line, REG_BEGIN))
         {
             _event.type = BEGIN;
@@ -613,10 +797,12 @@ namespace winrt::TerminalApp::implementation
         }
         else if (std::regex_match(line, REG_ERROR))
         {
-            // Remove the extra \n we added
+            // Remove the extra '\n' we added
             _Print(std::wstring(_event.response.begin(), _event.response.end() - 1));
+            _event.response.clear();
             _event.type = NOTHING;
         }
+
         // tmux specific rules
         else if (std::regex_match(line, REG_DETACH))
         {
@@ -680,7 +866,7 @@ namespace winrt::TerminalApp::implementation
 
         if (_event.type != BEGIN && _event.type != NOTHING)
         {
-            auto e = _event;
+            auto& e = _event;
             _dispatcherQueue.TryEnqueue([this, e]() {
                 _EventHandler(e);
             });
@@ -690,7 +876,7 @@ namespace winrt::TerminalApp::implementation
         return;
     }
 
-    // from tmux to controller
+    // From tmux to controller through the dcs. parse it per line.
     bool TmuxControl::_Advance(wchar_t ch)
     {
         std::wstring buffer = L"";
@@ -717,229 +903,6 @@ namespace winrt::TerminalApp::implementation
         }
 
         return true;
-    }
-
-    bool TmuxControl::_SyncPaneState(std::vector<TmuxPane> panes, int history)
-    {
-        for (auto& p : panes)
-        {
-            auto search = _attachedPanes.find(p.paneId);
-            if (search == _attachedPanes.end())
-            {
-                continue;
-            }
-
-            _CapturePane(p.paneId, p.cursorX, p.cursorY, history);
-        }
-
-        return true;
-    }
-
-    bool TmuxControl::_SyncWindowState(std::vector<TmuxWindow> windows)
-    {
-        for (auto& w : windows)
-        {
-            auto direction = SplitDirection::Left;
-            std::shared_ptr<Pane> rootPane{ nullptr };
-            //std::vector<int, std::shared_ptr<Pane>> attachedPanes;
-            std::unordered_map<int, std::shared_ptr<Pane>> attachedPanes;
-            for (auto& l : w.layout)
-            {
-                int rootSize;
-                auto& panes = l.panes;
-                auto& p = panes.at(0);
-                switch (l.type)
-                {
-                    case SIGNLE_PANE:
-                        {
-                            rootPane = _NewPane(w.windowId, p.id);
-                            continue;
-                        }
-                    case SPLIT_HORIZONTAL:
-                        direction = SplitDirection::Left;
-                        rootSize = p.width;
-                        break;
-                    case SPLIT_VERTICAL:
-                        direction = SplitDirection::Up;
-                        rootSize = p.height;
-                        break;
-                }
-
-                auto search = attachedPanes.find(p.id);
-                std::shared_ptr<Pane> targetPane{ nullptr };
-                int targetPaneId = p.id;
-                if (search == attachedPanes.end())
-                {
-                    targetPane = _NewPane(w.windowId, p.id);
-                    if (rootPane == nullptr) {
-                        rootPane = targetPane;
-                    }
-                    attachedPanes.insert({p.id, targetPane});
-                }
-                else
-                {
-                    targetPane = search->second;
-                }
-
-                for (size_t i = 1; i < panes.size(); i++)
-                {
-                    // Create and attach
-                    auto& p = panes.at(i);
-
-                    auto pane = _NewPane(w.windowId, p.id);
-                    attachedPanes.insert({p.id, pane});
-
-                    float splitSize;
-                    if (direction == SplitDirection::Left)
-                    {
-                        auto paneSize = panes.at(i).width;
-                        splitSize = _ComputeSplitSize(paneSize, rootSize, direction);
-                        //splitSize = 1.0f - (float)paneSize / (float)rootSize;
-                        rootSize -= (paneSize + 1);
-                    }
-                    else
-                    {
-                        auto paneSize = panes.at(i).height;
-                        splitSize = _ComputeSplitSize(paneSize, rootSize, direction);
-                        //splitSize = 1.0f - (float)paneSize / (float)rootSize;
-                        rootSize -= (paneSize + 1);
-                    }
-                    targetPane = targetPane->AttachPane(pane, direction, splitSize);
-                    attachedPanes.erase(targetPaneId);
-                    attachedPanes.insert({targetPaneId, targetPane});
-                }
-            }
-            auto tab = _page._CreateNewTabFromPane(rootPane);
-            _attachedTabs.insert({w.windowId, {tab, rootPane}});
-
-            tab.try_as<TerminalTab>()->SetTabText(winrt::hstring{ w.name });
-            _ListPanes(w.windowId, w.history);
-        }
-        return true;
-    }
-
-    std::vector<TmuxControl::Layout> TmuxControl::_ParseLayout(std::wstring& layout)
-    {
-        std::wregex RegPane { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+),(\\d+)" };
-
-        std::wregex RegSplitHPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\{" };
-        std::wregex RegSplitVPush { L"^,?(\\d+)x(\\d+),(\\d+),(\\d+)\\[" };
-        std::wregex RegSplitPop { L"^[\\} | \\]]" };
-        std::vector<TmuxControl::Layout> result;
-
-        auto _ExtractPane = [&](std::wsmatch& matches, PaneLayout& p) {
-            p.width = std::stoi(matches.str(1));
-            p.height = std::stoi(matches.str(2));
-            p.left = std::stoi(matches.str(3));
-            p.top = std::stoi(matches.str(4));
-            if (matches.size() > 5)
-            {
-                p.id = std::stoi(matches.str(5));
-            }
-        };
-
-        auto _ParseNested = [&](std::wstring) {
-            std::wsmatch matches;
-            size_t parse_len = 0;
-            Layout l;
-
-            std::vector<Layout> stack;
-
-            while (layout.length() > 0) {
-                if (std::regex_search(layout, matches, RegSplitHPush)) {
-                    PaneLayout p;
-                    _ExtractPane(matches, p);
-                    l.panes.push_back(p);
-                    stack.push_back(l);
-
-                    l.type = SPLIT_HORIZONTAL;
-                    l.panes.clear();
-                    l.panes.push_back(p);
-                } else if (std::regex_search(layout, matches, RegSplitVPush)) {
-                    PaneLayout p;
-                    _ExtractPane(matches, p);
-                    l.panes.push_back(p);
-                    stack.push_back(l);
-
-                    // New one
-                    l.type = SPLIT_VERTICAL;
-                    l.panes.clear();
-                    l.panes.push_back(p);
-                } else if (std::regex_search(layout, matches, RegPane)) {
-                    PaneLayout p;
-                    _ExtractPane(matches, p);
-                    l.panes.push_back(p);
-                } else if (std::regex_search(layout, matches, RegSplitPop)) {
-                    auto id = l.panes.back().id;
-                    l.panes.pop_back();
-                    l.panes.front().id = id;
-                    result.insert(result.begin(), l);
-
-                    l = stack.back();
-                    l.panes.back().id = id;
-                    stack.pop_back();
-                } else {
-                    assert(0);
-                }
-                parse_len = matches.length(0);
-                layout = layout.substr(parse_len);
-            }
-
-            return result;
-        };
-
-        // Single pane mode
-        std::wsmatch matches;
-        if (std::regex_match(layout, matches, RegPane)) {
-            PaneLayout p;
-            _ExtractPane(matches, p);
-
-            Layout l;
-            l.type = SIGNLE_PANE;
-            l.panes.push_back(p);
-
-            result.push_back(l);
-            return result;
-        }
-
-        // Nested mode
-        _ParseNested(layout);
-
-        return result;
-    }
-
-    std::wstring& TmuxControl::_DecodeOutput(const std::wstring& in, std::wstring& out)
-    {
-        auto it = in.begin();
-        while (it != in.end())
-        {
-            wchar_t c = *it;
-            if (c == L'\\')
-            {
-                ++it;
-                c = 0;
-                for (int i = 0; i < 3 && it != in.end(); ++i, ++it)
-                {
-                    if (*it < L'0' || *it > L'7')
-                    {
-                        c = L'?';
-                        break;
-                    }
-                    c = c * 8 + (*it - L'0');
-                }
-                out.push_back(c);
-                continue;
-            }
-
-            if (c == L'\n') {
-                out.push_back(L'\r');
-            }
-
-            out.push_back(c);
-            ++it;
-        }
-
-        return out;
     }
 
     // Commands
@@ -988,15 +951,15 @@ namespace winrt::TerminalApp::implementation
     bool TmuxControl::CapturePane::ResultHandler(const std::wstring& result, TmuxControl& tmux)
     {
         // Tmux output has an extra newline
-        auto output = result;
+        std::wstring output = result;
         output.pop_back();
-        // Put the cursor to right posit
+        // Put the cursor to right position
         output += std::format(L"\033[{};{}H", this->cursorY + 1, this->cursorX + 1);
         tmux._SendOutput(this->paneId, output);
         return true;
     }
 
-    void TmuxControl::_DiscoverPanes(int sessionId, int windowId, bool addPane)
+    void TmuxControl::_DiscoverPanes(int sessionId, int windowId, bool newWindow)
     {
         if (_state != ATTACHED)
         {
@@ -1005,14 +968,14 @@ namespace winrt::TerminalApp::implementation
         auto cmd = std::make_unique<DiscoverPanes>();
         cmd->sessionId = sessionId;
         cmd->windowId = windowId;
-        cmd->addPane = addPane;
+        cmd->newWindow = newWindow;
         _SendCommand(std::move(cmd));
         _ScheduleCommand();
     }
 
     std::wstring TmuxControl::DiscoverPanes::GetCommand()
     {
-        if (!this->addPane)
+        if (!this->newWindow)
         {
             return std::wstring(std::format(L"list-panes -s -F '"
                                             L"#{{pane_id}} #{{window_name}}"
@@ -1044,28 +1007,21 @@ namespace winrt::TerminalApp::implementation
             }
             int paneId = std::stoi(matches.str(1));
             std::wstring windowName = matches.str(2);
-            //std::wstring log(std::format(L"pane: {}\n", windowId));
-            //tmux_log(L"   LOG: " + log);
-            if (this->addPane)
+            // New window case, just one pane
+            if (this->newWindow)
             {
-                tmux._NewWindowAndPane(this->windowId, windowName, paneId);
+                tmux._NewWindowFinalize(this->windowId, paneId, windowName);
                 return true;
             }
             panes.insert(paneId);
         }
 
-        // For delete
+        // For pane exit case
         for (auto p = tmux._attachedPanes.begin(); p != tmux._attachedPanes.end();)
         {
             if (!panes.contains(p->first))
             {
-                //auto pane = p->second.pane;
                 p = tmux._attachedPanes.erase(p);
-                //auto windowId = this->windowId;
-                //p.second.first->Closed([windowId, &tmux](auto&& /*s*/, auto && /*e*/) {
-                //pane->ClosedByParent([windowId, &tmux]() {
-                //    tmux._UpdateAttachedPane(windowId);
-                //});
                 auto tab = tmux._GetTab(this->windowId);
                 auto activePane = tab.try_as<TerminalTab>()->GetActivePane();
                 activePane->Close();
@@ -1113,7 +1069,7 @@ namespace winrt::TerminalApp::implementation
             int windowId = std::stoi(matches.str(1));
             std::wstring log(std::format(L"window: {}\n", windowId));
             tmux_log(L"   LOG: " + log);
-            tmux._ResizeWindow(windowId, tmux._width, tmux._height);
+            tmux._ResizeWindow(windowId, tmux._terminalWidth, tmux._terminalHeight);
         }
 
         tmux._ListWindow(this->sessionId, -1);
@@ -1150,7 +1106,6 @@ namespace winrt::TerminalApp::implementation
 
         while (std::getline(in, line, L'\n'))
         {
-            TmuxPane p;
             std::wsmatch matches;
 
             if (!std::regex_match(line, matches, REG_PANE))
@@ -1158,12 +1113,14 @@ namespace winrt::TerminalApp::implementation
                 continue;
             }
 
-            p.sessionId = std::stoi(matches.str(1));
-            p.windowId = std::stoi(matches.str(2));
-            p.paneId = std::stoi(matches.str(3));
-            p.cursorX = std::stoi(matches.str(4));
-            p.cursorY = std::stoi(matches.str(5));
-            p.active = (std::stoi(matches.str(6)) == 1);
+            TmuxPane p = {
+                .sessionId = std::stoi(matches.str(1)),
+                .windowId = std::stoi(matches.str(2)),
+                .paneId = std::stoi(matches.str(3)),
+                .cursorX = std::stoi(matches.str(4)),
+                .cursorY = std::stoi(matches.str(5)),
+                .active = (std::stoi(matches.str(6)) == 1)
+            };
 
             std::wstring log(std::format(L"pane: {} {} {} {} {} {}\n", p.sessionId, p.windowId, p.paneId, p.cursorX, p.cursorY, p.active));
             tmux_log(L"   LOG: " + log);
@@ -1223,7 +1180,7 @@ namespace winrt::TerminalApp::implementation
             w.name = matches.str(8);
             w.history = std::stoi(matches.str(9));
             std::wstring layout(matches.str(7));
-            w.layout = tmux._ParseLayout(layout);
+            w.layout = tmux._ParseTmuxWindowLayout(layout);
             std::wstring log(std::format(L"window: {} {} {} {} {} {} {}\n", w.sessionId, w.windowId, w.width, w.height, w.active, w.history, matches.str(7)));
             tmux_log(L"   LOG: " + log);
             windows.push_back(w);
@@ -1343,17 +1300,15 @@ namespace winrt::TerminalApp::implementation
 
     void TmuxControl::_SplitPane(SplitDirection direction)
     {
-        if (_splittingPane.paneId != -1)
+        if (_splittingPane.first != -1)
         {
             return;
         }
 
-        //auto activePane = _GetActivePane();
-
         _splittingPane = {_activePaneId, direction};
         auto cmd = std::make_unique<SplitPane>();
         cmd->direction = direction;
-        cmd->paneId = _splittingPane.paneId;
+        cmd->paneId = _splittingPane.first;
         _SendCommand(std::move(cmd));
         _ScheduleCommand();
     }
@@ -1370,7 +1325,7 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
-    // from controller to tmux
+    // From controller to tmux
     void TmuxControl::_CommandHandler(const std::wstring& result)
     {
         if (_cmdState == WAITING && _cmdQueue.size() > 0)

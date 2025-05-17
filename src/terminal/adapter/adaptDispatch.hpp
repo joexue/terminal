@@ -328,6 +328,7 @@ namespace Microsoft::Console::VirtualTerminal
         til::enumset<Mode> _modes{ Mode::PageCursorCoupling };
 
         SgrStack _sgrStack;
+        StringHandlerProducer _tmuxControlHandlerProducer { nullptr };
 
         void _SetUnderlineStyleHelper(const VTParameter option, TextAttribute& attr) noexcept;
         size_t _SetRgbColorsHelper(const VTParameters options,

@@ -25,7 +25,7 @@ class Microsoft::Console::VirtualTerminal::ITermDispatch
 public:
     using StringHandler = std::function<bool(const wchar_t)>;
     using PrintHandler = std::function<void(const std::wstring_view)>;
-    // use this get the StringHandler, meanwhile pass the function to give app a function to print out bypass the parser
+    // Use this get the StringHandler, meanwhile pass the function to give app a function to print message bypass the parser
     using StringHandlerProducer = std::function<StringHandler(PrintHandler)>;
 
 #pragma warning(push)
@@ -189,7 +189,7 @@ public:
     virtual StringHandler EnterTmuxControl(const VTParameters parameters) = 0; // tmux -CC
     virtual void SetTmuxControlHandlerProducer(StringHandlerProducer producer) = 0; // tmux -CC
 
-    StringHandlerProducer _tmuxControlHandlerProducer { nullptr };
+    //StringHandlerProducer _tmuxControlHandlerProducer { nullptr };
 };
 inline Microsoft::Console::VirtualTerminal::ITermDispatch::~ITermDispatch() = default;
 #pragma warning(pop)
