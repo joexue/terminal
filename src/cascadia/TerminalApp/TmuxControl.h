@@ -252,7 +252,7 @@ namespace winrt::TerminalApp::implementation
         // Layout structs
         enum TmuxLayoutType : int
         {
-            SIGNLE_PANE,
+            SINGLE_PANE,
             SPLIT_HORIZONTAL,
             SPLIT_VERTICAL,
         };
@@ -268,7 +268,7 @@ namespace winrt::TerminalApp::implementation
 
         struct TmuxWindowLayout
         {
-            TmuxLayoutType type{ SIGNLE_PANE };
+            TmuxLayoutType type{ SINGLE_PANE };
             std::vector<TmuxPaneLayout> panes;
         };
 
@@ -300,7 +300,7 @@ namespace winrt::TerminalApp::implementation
             int windowId;
             int paneId;
             winrt::Microsoft::Terminal::Control::TermControl control;
-            bool initilized { false };
+            bool initialized { false };
         };
 
         // Private methods

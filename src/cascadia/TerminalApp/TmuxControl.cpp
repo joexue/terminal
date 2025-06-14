@@ -141,7 +141,7 @@ namespace winrt::TerminalApp::implementation
             }
         });
 
-        // Hide the original terminal's splitbutton, show tmux control owns
+        // Hide the original terminal's split button, show tmux control owns
         auto tabRow = _page.TabRow();
         auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
         auto newTabButton = tabRowImpl->NewTabButton();
@@ -212,9 +212,9 @@ namespace winrt::TerminalApp::implementation
         _fontHeight = fontSize.Height;
 
         // Tmux use one character to draw separator line, so we have to make the padding
-        // plus two borders equas one charcter's width or height
+        // plus two borders equals one character's width or height
         // Same reason, we have to disable the scrollbar, otherwise the local panes size
-        // will not match Tmmux's.
+        // will not match Tmux's.
         _thickness.Left = _thickness.Right = int((_fontWidth - 2 * PaneBorderSize) / 2);
         _thickness.Top = _thickness.Bottom = int((_fontHeight - 2 * PaneBorderSize) / 2);
 
@@ -302,7 +302,7 @@ namespace winrt::TerminalApp::implementation
 
         auto& c = search->second.control;
 
-        if (search->second.initilized) {
+        if (search->second.initialized) {
             std::wstring out = L"";
             DecodeOutput(text, out);
             c.SendOutput(out);
@@ -424,7 +424,7 @@ namespace winrt::TerminalApp::implementation
 
     std::shared_ptr<Pane> TmuxControl::_NewPane(int windowId, int paneId)
     {
-        auto connection = TerminalConnection::DumyConnection{};
+        auto connection = TerminalConnection::DummyConnection{};
         auto controlSettings = TerminalSettings::CreateWithProfile(_page._settings, _profile, *_page._bindings);
         const auto control = _page._CreateNewControlAndContent(controlSettings, connection);
 
@@ -437,7 +437,7 @@ namespace winrt::TerminalApp::implementation
             {
                 return;
             }
-            search->second.initilized = true;
+            search->second.initialized = true;
         });
 
         control.CharSent([this, paneId](auto, auto& args) {
@@ -549,7 +549,7 @@ namespace winrt::TerminalApp::implementation
                 auto& p = panes.at(0);
                 switch (l.type)
                 {
-                    case SIGNLE_PANE:
+                    case SINGLE_PANE:
                         {
                             rootPane = _NewPane(w.windowId, p.id);
                             continue;
@@ -692,7 +692,7 @@ namespace winrt::TerminalApp::implementation
             _ExtractPane(matches, p);
 
             TmuxWindowLayout l;
-            l.type = SIGNLE_PANE;
+            l.type = SINGLE_PANE;
             l.panes.push_back(p);
 
             result.push_back(l);
