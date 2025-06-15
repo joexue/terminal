@@ -1,13 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+#include "pch.h"
+#include "TmuxControl.h"
+
 #include <sstream>
 #include <iostream>
 #include <winrt/base.h>
+#include <LibraryResources.h>
 
-#include "pch.h"
-#include "ScratchpadContent.h"
-#include "TmuxControl.h"
 #include "TerminalPage.h"
 #include "TabRowControl.h"
 
@@ -82,6 +83,8 @@ namespace winrt::TerminalApp::implementation
         splitVertical.Click([this](auto, auto) {
             _SplitPane(SplitDirection::Down);
         });
+
+        _CreateNewTabMenu();
     }
 
     TmuxControl::StringHandler TmuxControl::TmuxControlHandlerProducer(const Control::TermControl control, const PrintHandler print)
@@ -110,6 +113,31 @@ namespace winrt::TerminalApp::implementation
         return [this](const auto ch) {
             return _Advance(ch);
         };
+    }
+
+    bool TmuxControl::ActivePaneIsTmuxControl()
+    {
+        if (const auto terminalTab{_page._GetFocusedTabImpl()})
+        {
+            if (const auto pane{terminalTab->GetActivePane()})
+            {
+                if (pane->GetTerminalControl())
+                {
+                    auto search = _attachedPanes.find(_activePaneId);
+                    if (search == _attachedPanes.end())
+                    {
+                        return false;
+                    }
+
+                    if (search->second.control == pane->GetTerminalControl())
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     void TmuxControl::_AttachSession()
@@ -150,8 +178,11 @@ namespace winrt::TerminalApp::implementation
         newTmuxTabButton.Background(newTabButton.Background());
         newTmuxTabButton.Foreground(newTabButton.Foreground());
 
-        newTabButton.Visibility(Visibility::Collapsed);
-        newTmuxTabButton.Visibility(Visibility::Visible);
+        //newTabButton.Visibility(Visibility::Collapsed);
+        //newTmuxTabButton.Visibility(Visibility::Visible);
+        auto menuCount = newTabButton.Flyout().try_as<Controls::MenuFlyout>().Items().Size();
+        newTabButton.Flyout().try_as<Controls::MenuFlyout>().Items().InsertAt(menuCount - 4, _newTabMenu);
+
     }
 
     void TmuxControl::_DetachSession()
@@ -184,8 +215,10 @@ namespace winrt::TerminalApp::implementation
         auto newTabButton = tabRowImpl->NewTabButton();
         auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
 
-        newTabButton.Visibility(Visibility::Visible);
-        newTmuxTabButton.Visibility(Visibility::Collapsed);
+        //newTabButton.Visibility(Visibility::Visible);
+        //newTmuxTabButton.Visibility(Visibility::Collapsed);
+        auto menuCount = newTabButton.Flyout().try_as<Controls::MenuFlyout>().Items().Size();
+        newTabButton.Flyout().try_as<Controls::MenuFlyout>().Items().RemoveAt(menuCount - 5);
 
         _inUse = false;
     }
@@ -224,6 +257,30 @@ namespace winrt::TerminalApp::implementation
         _profile.Padding(XamlThicknessToOptimalString(_thickness));
         _profile.ScrollState(winrt::Microsoft::Terminal::Control::ScrollbarState::Hidden);
         _profile.Icon(L"\uF714");
+    }
+
+    void TmuxControl::_CreateNewTabMenu()
+    {
+        auto newTabRun = Documents::Run();
+        newTabRun.Text(RS_(L"NewTabRun/Text"));
+        auto newPaneRun = Documents::Run();
+        newPaneRun.Text(RS_(L"NewPaneRun/Text"));
+
+        auto textBlock = Controls::TextBlock{};
+        textBlock.Inlines().Append(newTabRun);
+        textBlock.Inlines().Append(Documents::LineBreak{});
+        textBlock.Inlines().Append(newPaneRun);
+
+        _newTabMenu.Text(RS_(L"NewTmuxControlTab/Text"));
+        Controls::ToolTipService::SetToolTip(_newTabMenu, box_value(textBlock));
+        Controls::FontIcon newTabIcon{};
+        newTabIcon.Glyph(L"\xF714");
+        newTabIcon.FontFamily(Media::FontFamily{L"Segoe Fluent Icons,Segoe MDL2 Assets"});
+        _newTabMenu.Icon(newTabIcon);
+
+        _newTabMenu.Click([this](auto &&, auto&&) {
+            _NewWindow();
+        });
     }
 
     float TmuxControl::_ComputeSplitSize(int newSize, int originSize, SplitDirection direction) const

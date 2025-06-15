@@ -24,6 +24,7 @@ namespace winrt::TerminalApp::implementation
     public:
         TmuxControl(TerminalPage& page);
         StringHandler TmuxControlHandlerProducer(const winrt::Microsoft::Terminal::Control::TermControl control, const PrintHandler print);
+        bool ActivePaneIsTmuxControl();
 
     private:
         static const std::wregex REG_BEGIN;
@@ -307,6 +308,7 @@ namespace winrt::TerminalApp::implementation
         void _AttachSession();
         void _DetachSession();
         void _SetupProfile();
+        void _CreateNewTabMenu();
 
         float _ComputeSplitSize(int newSize, int originSize, SplitDirection direction) const;
         TerminalApp::TerminalTab _GetTab(int windowId) const;
@@ -355,6 +357,8 @@ namespace winrt::TerminalApp::implementation
 
         winrt::event_token _detachKeyDownRevoker;
         winrt::event_token _windowSizeChangedRevoker;
+
+        ::winrt::Windows::UI::Xaml::Controls::MenuFlyoutItem _newTabMenu{};
 
         std::vector<wchar_t> _dcsBuffer;
         std::deque<std::unique_ptr<TmuxControl::Command>> _cmdQueue;
