@@ -63,26 +63,6 @@ namespace winrt::TerminalApp::implementation
     {
         _dispatcherQueue = DispatcherQueue::GetForCurrentThread();
 
-        auto tabRow = _page.TabRow();
-        auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
-        auto newTabButton = tabRowImpl->NewTabButton();
-        auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
-
-        newTmuxTabButton.Click([this](auto, auto) {
-            _NewWindow();
-        });
-
-        auto flyout = newTmuxTabButton.Flyout().try_as<Controls::MenuFlyout>();
-
-        auto splitHorizontal = flyout.Items().GetAt(0).try_as<Controls::MenuFlyoutItem>();
-        splitHorizontal.Click([this](auto, auto) {
-            _SplitPane(SplitDirection::Right);
-        });
-
-        auto splitVertical = flyout.Items().GetAt(1).try_as<Controls::MenuFlyoutItem>();
-        splitVertical.Click([this](auto, auto) {
-            _SplitPane(SplitDirection::Down);
-        });
 
         _CreateNewTabMenu();
     }
@@ -140,6 +120,35 @@ namespace winrt::TerminalApp::implementation
         return false;
     }
 
+    void TmuxControl::SplitActivePane(SplitDirection direction)
+    {
+        if (direction == SplitDirection::Automatic)
+        {
+            auto control = _attachedPanes.find(_activePaneId)->second.control;
+            if (control.ViewWidth() > control.ViewHeight())
+            {
+                direction = SplitDirection::Right;
+            }
+            else
+            {
+                direction = SplitDirection::Down;
+            }
+        }
+        switch(direction)
+        {
+            case SplitDirection::Right:
+                _SplitPane(SplitDirection::Right);
+                break;
+            case SplitDirection::Down:
+                _SplitPane(SplitDirection::Down);
+                break;
+            default:
+                break;
+        }
+
+        return;
+    }
+
     void TmuxControl::_AttachSession()
     {
         _state = ATTACHING;
@@ -173,16 +182,16 @@ namespace winrt::TerminalApp::implementation
         auto tabRow = _page.TabRow();
         auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
         auto newTabButton = tabRowImpl->NewTabButton();
-        auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
 
-        newTmuxTabButton.Background(newTabButton.Background());
-        newTmuxTabButton.Foreground(newTabButton.Foreground());
-
-        //newTabButton.Visibility(Visibility::Collapsed);
-        //newTmuxTabButton.Visibility(Visibility::Visible);
         auto menuCount = newTabButton.Flyout().try_as<Controls::MenuFlyout>().Items().Size();
         newTabButton.Flyout().try_as<Controls::MenuFlyout>().Items().InsertAt(menuCount - 4, _newTabMenu);
 
+        _newTabClickRevoker = newTabButton.Click([this](auto&&, auto&&) {
+            if (ActivePaneIsTmuxControl())
+            {
+                _OpenNewTerminalViaDropdown();
+            }
+        });
     }
 
     void TmuxControl::_DetachSession()
@@ -213,13 +222,11 @@ namespace winrt::TerminalApp::implementation
         auto tabRow = _page.TabRow();
         auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(tabRow);
         auto newTabButton = tabRowImpl->NewTabButton();
-        auto newTmuxTabButton = tabRowImpl->NewTmuxTabButton();
 
-        //newTabButton.Visibility(Visibility::Visible);
-        //newTmuxTabButton.Visibility(Visibility::Collapsed);
         auto menuCount = newTabButton.Flyout().try_as<Controls::MenuFlyout>().Items().Size();
         newTabButton.Flyout().try_as<Controls::MenuFlyout>().Items().RemoveAt(menuCount - 5);
 
+        newTabButton.Click(_newTabClickRevoker);
         _inUse = false;
     }
 
@@ -279,7 +286,7 @@ namespace winrt::TerminalApp::implementation
         _newTabMenu.Icon(newTabIcon);
 
         _newTabMenu.Click([this](auto &&, auto&&) {
-            _NewWindow();
+            _OpenNewTerminalViaDropdown();
         });
     }
 
@@ -313,6 +320,36 @@ namespace winrt::TerminalApp::implementation
         }
 
         return search->second;
+    }
+
+    void TmuxControl::_OpenNewTerminalViaDropdown()
+    {
+        const auto window = CoreWindow::GetForCurrentThread();
+        const auto rAltState = window.GetKeyState(VirtualKey::RightMenu);
+        const auto lAltState = window.GetKeyState(VirtualKey::LeftMenu);
+        const auto altPressed = WI_IsFlagSet(lAltState, CoreVirtualKeyStates::Down) ||
+                                WI_IsFlagSet(rAltState, CoreVirtualKeyStates::Down);
+
+        if (altPressed)
+        {
+            // tmux panes don't share tab with other panes
+            if (ActivePaneIsTmuxControl())
+            {
+                auto control = _attachedPanes.find(_activePaneId)->second.control;
+                if (control.ViewWidth() > control.ViewHeight())
+                {
+                    _SplitPane(SplitDirection::Right);
+                }
+                else
+                {
+                    _SplitPane(SplitDirection::Down);
+                }
+            }
+        }
+        else
+        {
+            _NewWindow();
+        }
     }
 
     void TmuxControl::_SendOutput(int paneId, const std::wstring& text)

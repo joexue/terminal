@@ -244,6 +244,15 @@ namespace winrt::TerminalApp::implementation
         _newTabButton.Click([weakThis{ get_weak() }](auto&&, auto&&) {
             if (auto page{ weakThis.get() })
             {
+                if constexpr (Feature_TmuxControl::IsEnabled())
+                {
+                    //Tmux control takes over
+                    if (page->_tmuxControl && page->_tmuxControl->ActivePaneIsTmuxControl())
+                    {
+                        return;
+                    }
+                }
+
                 page->_OpenNewTerminalViaDropdown(NewTerminalArgs());
             }
         });
@@ -1209,6 +1218,15 @@ namespace winrt::TerminalApp::implementation
             }
             if (altPressed && !debugTap)
             {
+                // tmux control panes don't share tab with other panes
+                if constexpr (Feature_TmuxControl::IsEnabled())
+                {
+                    if (_tmuxControl && _tmuxControl->ActivePaneIsTmuxControl())
+                    {
+                        return;
+                    }
+                }
+
                 this->_SplitPane(_GetFocusedTabImpl(),
                                  SplitDirection::Automatic,
                                  0.5f,
@@ -3363,7 +3381,7 @@ namespace winrt::TerminalApp::implementation
 
         if constexpr (Feature_TmuxControl::IsEnabled())
         {
-            if (profile.AllowTmuxControl())
+            if (profile.AllowTmuxControl() && _tmuxControl)
             {
                 control.SetTmuxControlHandlerProducer([this, control](auto print) {
                     return _tmuxControl->TmuxControlHandlerProducer(control, print);

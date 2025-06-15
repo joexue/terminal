@@ -25,6 +25,7 @@ namespace winrt::TerminalApp::implementation
         TmuxControl(TerminalPage& page);
         StringHandler TmuxControlHandlerProducer(const winrt::Microsoft::Terminal::Control::TermControl control, const PrintHandler print);
         bool ActivePaneIsTmuxControl();
+        void SplitActivePane(SplitDirection direction);
 
     private:
         static const std::wregex REG_BEGIN;
@@ -337,6 +338,7 @@ namespace winrt::TerminalApp::implementation
         void _ListWindow(int sessionId, int windowId);
         void _ListPanes(int windowId, int history);
         void _NewWindow();
+        void _OpenNewTerminalViaDropdown();
         void _ResizePane(int paneId, int width, int height);
         void _ResizeWindow(int windowId, int width, int height);
         void _SelectPane(int paneId);
@@ -357,6 +359,7 @@ namespace winrt::TerminalApp::implementation
 
         winrt::event_token _detachKeyDownRevoker;
         winrt::event_token _windowSizeChangedRevoker;
+        winrt::event_token _newTabClickRevoker;
 
         ::winrt::Windows::UI::Xaml::Controls::MenuFlyoutItem _newTabMenu{};
 
