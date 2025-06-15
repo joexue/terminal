@@ -106,7 +106,10 @@ namespace winrt::TerminalApp::implementation
         }
         _hostingHwnd = hwnd;
 
-        _tmuxControl = std::make_unique<TmuxControl>(*this);
+        if constexpr (Feature_TmuxControl::IsEnabled())
+        {
+            _tmuxControl = std::make_unique<TmuxControl>(*this);
+        }
         return S_OK;
     }
 
@@ -3357,9 +3360,13 @@ namespace winrt::TerminalApp::implementation
             resultPane->ClearActive();
             original->SetActive();
         }
-        control.SetTmuxControlHandlerProducer([this, control](auto print) {
-            return _tmuxControl->TmuxControlHandlerProducer(control, print);
-        });
+
+        if constexpr (Feature_TmuxControl::IsEnabled())
+        {
+            control.SetTmuxControlHandlerProducer([this, control](auto print) {
+                return _tmuxControl->TmuxControlHandlerProducer(control, print);
+            });
+        }
 
         return resultPane;
     }
