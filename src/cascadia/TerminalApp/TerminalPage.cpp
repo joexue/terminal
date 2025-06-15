@@ -3363,9 +3363,12 @@ namespace winrt::TerminalApp::implementation
 
         if constexpr (Feature_TmuxControl::IsEnabled())
         {
-            control.SetTmuxControlHandlerProducer([this, control](auto print) {
-                return _tmuxControl->TmuxControlHandlerProducer(control, print);
-            });
+            if (profile.AllowTmuxControl())
+            {
+                control.SetTmuxControlHandlerProducer([this, control](auto print) {
+                    return _tmuxControl->TmuxControlHandlerProducer(control, print);
+                });
+            }
         }
 
         return resultPane;
