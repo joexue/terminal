@@ -1118,6 +1118,14 @@ namespace winrt::TerminalApp::implementation
     void TerminalPage::_TabDragStarted(const IInspectable& /*sender*/,
                                        const IInspectable& /*eventArgs*/)
     {
+        if constexpr (Feature_TmuxControl::IsEnabled())
+        {
+            //Tmux control tab doesn't support to drag
+            if (_tmuxControl && _tmuxControl->ActivePaneIsTmuxControl())
+            {
+                return;
+            }
+        }
         _rearranging = true;
         _rearrangeFrom = std::nullopt;
         _rearrangeTo = std::nullopt;
@@ -1126,6 +1134,14 @@ namespace winrt::TerminalApp::implementation
     void TerminalPage::_TabDragCompleted(const IInspectable& /*sender*/,
                                          const IInspectable& /*eventArgs*/)
     {
+        if constexpr (Feature_TmuxControl::IsEnabled())
+        {
+            //Tmux control tab doesn't support to drag
+            if (_tmuxControl && _tmuxControl->ActivePaneIsTmuxControl())
+            {
+                return;
+            }
+        }
         auto& from{ _rearrangeFrom };
         auto& to{ _rearrangeTo };
 

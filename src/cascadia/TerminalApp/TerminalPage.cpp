@@ -5269,6 +5269,14 @@ namespace winrt::TerminalApp::implementation
     void TerminalPage::_onTabDragStarting(const winrt::Microsoft::UI::Xaml::Controls::TabView&,
                                           const winrt::Microsoft::UI::Xaml::Controls::TabViewTabDragStartingEventArgs& e)
     {
+        if constexpr (Feature_TmuxControl::IsEnabled())
+        {
+            //Tmux control tab doesn't support to drag
+            if (_tmuxControl && _tmuxControl->ActivePaneIsTmuxControl())
+            {
+                return;
+            }
+        }
         // Get the tab impl from this event.
         const auto eventTab = e.Tab();
         const auto tabBase = _GetTabByTabViewItem(eventTab);
