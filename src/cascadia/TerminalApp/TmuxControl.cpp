@@ -608,6 +608,15 @@ namespace winrt::TerminalApp::implementation
             _ResizePane(paneId, width, height);
         });
 
+        pane->Closed([this, paneId, pane](auto&&, auto&&) {
+            //if (pane->GetTerminalControl() == nullptr)
+            //{
+                //return;
+            //}
+
+            _KillPane(paneId);
+        });
+
         _attachedPanes.insert({ paneId, {windowId, paneId, control} });
 
         return pane;
@@ -1142,6 +1151,19 @@ namespace winrt::TerminalApp::implementation
 
         tmux._ListWindow(this->sessionId, -1);
         return true;
+    }
+
+    void TmuxControl::_KillPane(int paneId)
+    {
+        auto cmd = std::make_unique<KillPane>();
+        cmd->paneId = paneId;
+        _SendCommand(std::move(cmd));
+        _ScheduleCommand();
+    }
+
+    std::wstring TmuxControl::KillPane::GetCommand()
+    {
+        return std::wstring(std::format(L"kill-pane -t %{}\n", this->paneId));
     }
 
     void TmuxControl::_ListPanes(int windowId, int history)

@@ -164,6 +164,14 @@ namespace winrt::TerminalApp::implementation
             int sessionId{ -1 };
         };
 
+        struct KillPane : public Command
+        {
+        public:
+            std::wstring GetCommand() override;
+
+            int paneId{ -1 };
+        };
+
         struct ListPanes : public Command
         {
         public:
@@ -335,6 +343,7 @@ namespace winrt::TerminalApp::implementation
         void _CapturePane(int paneId, int cursorX, int cursorY, int history);
         void _DiscoverPanes(int sessionId, int windowId, bool newWindow);
         void _DiscoverWindows(int sessionId);
+        void _KillPane(int paneId);
         void _ListWindow(int sessionId, int windowId);
         void _ListPanes(int windowId, int history);
         void _NewWindow();
